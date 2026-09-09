@@ -1,7 +1,7 @@
 import { previewCharmReplacement, charmComparisonCandidates } from './charm-comparison.ts';
 import { ITEM_LOCK_ICON } from './item-protection.ts';
 import type { DropItemSource } from './drop-item-command.ts';
-import { activeCharms, PACK_COLUMNS, PACK_ROWS, PACK_CELLS, INVENTORY_CELLS, CHARM_ROWS, itemFootprint, resolvePackLayout, packOccupancy, footprintCells } from './inventory-grid.ts';
+import { activeCharms, PACK_COLUMNS, PACK_ROWS, PACK_CELLS, INVENTORY_CELLS, CHARM_ROWS, resolvePackLayout, packOccupancy, footprintCells } from './inventory-grid.ts';
 import { itemPackIconSVG, itemIconSVG } from './item-art.ts';
 import { itemDisplayName } from './items.ts';
 import { itemTooltipMarkup, updateItemSlot, CHANGE_LABELS, PREVIEW_PERCENT } from './item-ui.ts';
@@ -88,7 +88,6 @@ export class InventoryPanel {
   private hovered: ItemLocation | null = null;
   private drag: ItemReference | null = null;
   private locking = false;
-  private dragOffset = { x: 0, y: 0 };
   private touchItem: ItemReference | null = null;
   private touchMoving = false;
   private sheet!: HTMLElement;
@@ -219,12 +218,11 @@ export class InventoryPanel {
       const index = Number(cell.dataset.bag), item = player.character.inventory[index];
       cell.hidden = !item;
       if (!item) { delete cell.dataset.cell; return; }
-      const position = layout[item.id], size = itemFootprint(item);
+      const position = layout[item.id];
       const parent = position === undefined ? overflow : position >= PACK_CELLS ? this.element.querySelector<HTMLElement>('.character-charm-grid')! : bag;
       if (cell.parentElement !== parent) parent.append(cell);
-      if (position === undefined) { delete cell.dataset.cell; cell.style.gridColumn = `span ${size.width}`; cell.style.gridRow = `span ${size.height}`; overflowCount++; }
-      else { cell.dataset.cell = String(position); cell.style.gridColumn = `${position % PACK_COLUMNS + 1} / span ${size.width}`; cell.style.gridRow = `${Math.floor((position >= PACK_CELLS ? position-PACK_CELLS : position) / PACK_COLUMNS) + 1} / span ${size.height}`; }
-      cell.style.setProperty('--pack-width', String(size.width)); cell.style.setProperty('--pack-height', String(size.height));
+      if (position === undefined) { delete cell.dataset.cell; cell.style.gridColumn = ''; cell.style.gridRow = ''; overflowCount++; }
+      else { cell.dataset.cell = String(position); cell.style.gridColumn = String(position % PACK_COLUMNS + 1); cell.style.gridRow = String(Math.floor((position >= PACK_CELLS ? position-PACK_CELLS : position) / PACK_COLUMNS) + 1); }
       cell.classList.toggle('is-filtered-out', !matchesInventoryFilter(item, this.filters, this.rarities));
     });
     this.element.querySelector<HTMLElement>('.character-overflow')!.hidden = !overflowCount;
@@ -251,9 +249,8 @@ export class InventoryPanel {
         label: reserved ? `Off-hand reserved by two-handed ${player.character.equipped.weapon!.name}` : item ? `${itemDisplayName(item)}, ${TIER_NAMES[item.tier]}, item level ${item.itemLevel}${location.type === 'equipment' ? `, equipped in ${SLOT_NAMES[location.slot]}` : ''}${item.requiredLevel > player.level ? `, requires level ${item.requiredLevel}` : ''}` : location.type === 'equipment' ? `${SLOT_NAMES[location.slot]}, empty` : `Empty inventory slot ${location.index + 1}`,
       });
       if (item && location.type === 'bag' && cell.dataset.packSignature !== cell.dataset.signature) {
-        const size = itemFootprint(item);
         cell.querySelector('svg')?.remove();
-        cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item, size.width, size.height));
+        cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item, 1, 1));
         cell.dataset.packSignature = cell.dataset.signature;
       }
     }
@@ -569,12 +566,6 @@ export class InventoryPanel {
       const location = this.locationFrom(event.target), item = location && this.itemAt(location);
       if (!location || !item || !event.dataTransfer) { event.preventDefault(); return; }
       this.drag = { ...location, id: item.id };
-      const sourceCell = this.cells.get(locationKey(location))!;
-      if (location.type === 'bag') {
-        const bounds = sourceCell.getBoundingClientRect(), size = itemFootprint(item);
-        this.dragOffset = { x: Math.min(size.width - 1, Math.max(0, Math.floor((event.clientX - bounds.left) / (bounds.width / size.width)))),
-          y: Math.min(size.height - 1, Math.max(0, Math.floor((event.clientY - bounds.top) / (bounds.height / size.height)))) };
-      }
       event.dataTransfer.setData('application/x-evergrow-item', item.id);
       event.dataTransfer.effectAllowed = 'move';
       this.hideTooltip();
@@ -594,15 +585,12 @@ export class InventoryPanel {
       const valid = !!target && this.canDrop(target);
       if (event.dataTransfer) event.dataTransfer.dropEffect = valid ? 'move' : 'none';
       if (target?.type === 'bag' && target.cell !== undefined && target.cell >= 0 && this.drag) {
-        const item = this.itemAt(this.drag);
-        if (item) {
-          const preview = this.element.querySelector<HTMLElement>('.character-pack-placement')!, size = itemFootprint(item);
+        if (this.itemAt(this.drag)) {
+          const preview = this.element.querySelector<HTMLElement>('.character-pack-placement')!;
           (target.cell >= PACK_CELLS ? this.element.querySelector<HTMLElement>('.character-charm-grid')! : this.element.querySelector<HTMLElement>('.character-bag')!).append(preview);
           preview.hidden = false; preview.classList.toggle('is-invalid', !valid);
           preview.style.left = `calc(3px + ${target.cell % PACK_COLUMNS} * (var(--pack-cell) + var(--pack-gap)))`;
           preview.style.top = `calc(3px + ${Math.floor((target.cell >= PACK_CELLS ? target.cell-PACK_CELLS : target.cell) / PACK_COLUMNS)} * (var(--pack-cell) + var(--pack-gap)))`;
-          preview.style.width = `calc(${size.width} * (var(--pack-cell) + var(--pack-gap)) - var(--pack-gap))`;
-          preview.style.height = `calc(${size.height} * (var(--pack-cell) + var(--pack-gap)) - var(--pack-gap))`;
         }
       }
       if (!target || !valid) return;
@@ -691,8 +679,8 @@ export class InventoryPanel {
     const charms=bag.classList.contains('character-charm-grid');
     const first = bag.querySelector<HTMLElement>('.character-grid-cell')!.getBoundingClientRect();
     const gap = parseFloat(getComputedStyle(bag).columnGap) || 0;
-    const x = Math.floor((event.clientX - first.left) / (first.width + gap)) - this.dragOffset.x;
-    const y = Math.floor((event.clientY - first.top) / (first.height + gap)) - this.dragOffset.y;
+    const x = Math.floor((event.clientX - first.left) / (first.width + gap));
+    const y = Math.floor((event.clientY - first.top) / (first.height + gap));
     return { type: 'bag', index: -1, cell: x < 0 || y < 0 || x >= PACK_COLUMNS || y >= (charms?CHARM_ROWS:PACK_ROWS) ? -1 : (charms?PACK_CELLS:0)+y * PACK_COLUMNS + x };
   }
 
@@ -708,7 +696,7 @@ export class InventoryPanel {
     for (const cell of this.cells.values()) cell.classList.remove('is-drop-target');
     this.element.querySelector<HTMLElement>('.character-pack-placement')!.hidden = true;
   }
-  private clearDrag(): void { this.element.classList.remove('is-item-dragging'); this.clearDropHighlight(); this.drag = null; this.dragOffset = { x: 0, y: 0 }; for (const cell of this.cells.values()) cell.classList.remove('is-drop-target', 'is-dragging', 'is-equip-target'); }
+  private clearDrag(): void { this.element.classList.remove('is-item-dragging'); this.clearDropHighlight(); this.drag = null; for (const cell of this.cells.values()) cell.classList.remove('is-drop-target', 'is-dragging', 'is-equip-target'); }
 
   private showTooltip(location: ItemLocation): void {
     this.statTooltip.hide();

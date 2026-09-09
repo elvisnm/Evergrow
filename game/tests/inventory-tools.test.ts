@@ -99,7 +99,7 @@ test('sorts compact occupied cells without losing items, and recency survives so
   const newest = generateItem(33, 1, 'weapon', 'longsword', 'common');
   for (const item of [old, middle, newest]) assert.ok(addInventoryItem(sheet, item));
   const before = ids(sheet);
-  assert.ok(moveInventoryItem(sheet, 2, 39).ok);
+  assert.ok(moveInventoryItem(sheet, 2, 20).ok);
   sortInventory(sheet, 'rarity'); assert.equal(sheet.inventory[0], old);
   sortInventory(sheet, 'type'); assert.equal(sheet.inventory[0], newest);
   sortInventory(sheet, 'recent'); assert.deepEqual(sheet.inventory.slice(0, 3), [newest, middle, old]);
@@ -175,7 +175,7 @@ test('moving a filtered item targets a physical empty cell and retains acquisiti
   const item=sheet.inventory[53]!, hidden=sheet.inventory[2]!, owned=ids(sheet);
   sheet.recentItems=[item.id,hidden.id];
   const beforeLayout = resolvePackLayout(sheet);
-  const source=53, target=59;
+  const source=53, target=20;
   assert.ok(moveInventoryItem(sheet,source,target).ok);
   assert.equal(sheet.inventoryLayout![item.id],target);assert.equal(sheet.inventory[2]?.id,hidden.id);
   assert.equal(sheet.inventoryLayout![hidden.id],beforeLayout[hidden.id]);

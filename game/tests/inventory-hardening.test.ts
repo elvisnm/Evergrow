@@ -5,7 +5,7 @@ import { improveItem, improvementProblem, nextEnhancementLevel } from '../src/it
 import { quoteService, planService, improvementPrice } from '../src/commerce.ts';
 import { CHARM_PROFILES, charmThematicStat } from '../src/charm-content.ts';
 import { bulkSaleItems, setItemLock } from '../src/item-protection.ts';
-import { activeCharms, compactPackLayout, resolvePackLayout, packSpaceProblem, validPackLayout } from '../src/inventory-grid.ts';
+import { activeCharms, resolvePackLayout, packSpaceProblem, validPackLayout, PACK_CELLS, PACK_COLUMNS, CHARM_ROWS } from '../src/inventory-grid.ts';
 import { addInventoryItem } from '../src/inventory.ts';
 import { previewCharmReplacement } from '../src/charm-comparison.ts';
 import { sortInventory } from '../src/inventory-tools.ts';
@@ -15,8 +15,9 @@ import { executeDropItem } from '../src/drop-item-command.ts';
 import { refreshCharacter } from '../src/character.ts';
 import { CharacterRepository } from '../src/character-storage.ts';
 import { CharacterSession } from '../src/character-session.ts';
-import { decodeCharacterSave } from '../src/character-save.ts';
+import { CHARACTER_SAVE_VERSION, decodeCharacterSave } from '../src/character-save.ts';
 import type { TownNPC } from '../src/npcs.ts';
+import type { CharacterSheet } from '../src/character-types.ts';
 const world={seed:7319,generationVersion:4,blocked:()=>false,move:(x:number,y:number,dx:number,dy:number)=>({x:x+dx,y:y+dy}),getPOIs:()=>[]};
 const smith:TownNPC={id:'smith',buildingId:'stall',role:'blacksmith',name:'Smith',seed:1,x:0,y:0,level:1};
 
@@ -39,6 +40,7 @@ test('charm sizes have focused budgets and keep their first affix thematic throu
   for(const profile of CHARM_PROFILES)for(const tier of ['common','magic','rare','epic','legendary'] as const)for(let seed=0;seed<8;seed++){
     let item=generateItem(seed,20,'charm',profile.id,tier);
     assert.equal(item.affixes.length,profile.size.counts[['common','magic','rare','epic','legendary'].indexOf(tier)]);
+    // Reads the size CLASS authored in CHARM_SIZES, never the spatial footprint, which is uniform 1x1.
     if(profile.size.width*profile.size.height<=2)assert.ok(item.affixes.length<=2);
     for(const operation of ['rerollOne','rerollAll','rarity'] as const){
       assert.ok(charmThematicStat(item,item.affixes[0].stat));assert.ok(validItem(item));
@@ -57,7 +59,7 @@ test('validated old charms rebalance deterministically on load without losing it
   const data=new Map<string,string>(),sim=new Simulation(world,{spawn:false}),repo=new CharacterRepository({getItem:k=>data.get(k)??null,setItem:(k,v)=>{data.set(k,v);}}),session=new CharacterSession(repo,4);
   addInventoryItem(sim.player.character,generateItem(5,1,'charm','jade-pebble','rare'));refreshCharacter(sim.player);
   assert.ok(await session.create(0,'Test',7319,sim.captureCheckpoint(),'rebalance-save',100));
-  const record=structuredClone(repo.read(0).record!);record.checkpoint.character.inventory[0]=old;record.checkpoint.character.inventoryLayout={[old.id]:72};
+  const record=structuredClone(repo.read(0).record!);record.checkpoint.character.inventory[0]=old;record.checkpoint.character.inventoryLayout={[old.id]:PACK_CELLS};
   const raw=JSON.stringify(record),decoded=decodeCharacterSave(raw);assert.ok(decoded);
   assert.deepEqual(decoded.checkpoint.character.inventory[0],rebalanced);assert.equal(JSON.stringify(record),raw);
 });
@@ -82,26 +84,23 @@ test('item locks and explicit active-charm consent are enforced by transaction o
 
 test('bounded packing recovers a fragmented layout without losing items or changing acquisition order',()=>{
   const inventory=Array.from({length:14},(_,i)=>generateItem(801+i,1,(['ring','chest','head','weapon'] as const)[(9*(i+3)+i*i)%4],undefined,'common'));
-  assert.equal(Object.keys(resolvePackLayout({inventory})).length,13);
-  const layout=compactPackLayout(inventory);assert.equal(Object.keys(layout).length,14);assert.ok(validPackLayout(inventory,layout));
+  const layout=resolvePackLayout({inventory});assert.equal(Object.keys(layout).length,14);assert.ok(validPackLayout(inventory,layout));
   const s=createCharacterSheet();s.inventory=inventory;s.inventoryLayout=layout;s.recentItems=inventory.map(i=>i.id);
   const ids=[...s.recentItems];assert.ok(sortInventory(s,'compact').ok);assert.deepEqual(s.recentItems,ids);assert.equal(Object.keys(s.inventoryLayout!).length,14);
-  assert.deepEqual(compactPackLayout(inventory),layout);
+  const sorted=structuredClone(s);assert.ok(sortInventory(s,'compact').ok);assert.deepEqual(s,sorted);
 });
 
 test('replacement compares several active stones to one stored stone without moving anything',()=>{
   const s=createCharacterSheet();
-  for(let i=0;i<48;i++)addInventoryItem(s,generateItem(8000+i,10,'charm','jade-pebble','common'));
+  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS;i++)addInventoryItem(s,generateItem(8000+i,10,'charm','jade-pebble','common'));
   const incoming=generateItem(9000,10,'charm','storm-monolith','legendary');s.stash=Array(96).fill(null);s.stash[0]=incoming;
-  const before=structuredClone(s),ids=[0,1,12,13,24,25,36,37].map(i=>s.inventory[i]!.id);
+  const before=structuredClone(s),ids=[0,1,2,3,4,5,6,7].map(i=>s.inventory[i]!.id);
   assert.equal(previewCharmReplacement(s,10,incoming.id,[]).ok,false);
   const preview=previewCharmReplacement(s,10,incoming.id,ids);assert.ok(preview.ok);assert.ok(preview.changes.length>0);assert.equal(preview.removed.length,8);
-  assert.deepEqual(s,before);assert.equal(activeCharms(s,10).length,48);
+  assert.deepEqual(s,before);assert.equal(activeCharms(s,10).length,PACK_COLUMNS*CHARM_ROWS);
   assert.equal(previewCharmReplacement(s,1,incoming.id,ids).ok,false);
   assert.equal(previewCharmReplacement(s,10,incoming.id,[ids[0],ids[0]]).ok,false);
   assert.match(packSpaceProblem(s,incoming),/full/);
-  const scattered=structuredClone(s);for(let i=0;i<48;i+=2)scattered.inventory[i]=null;
-  assert.match(packSpaceProblem(scattered,incoming),/No 2 × 4 space/);
 });
 
 test('city preferences still apply to later charm rolls when the thematic first roll has one category',()=>{
@@ -111,4 +110,29 @@ test('city preferences still apply to later charm rolls when the thematic first 
   const result=quoteService(s,enchanter,20,{type:'improve',source:{bag:0},operation:'rerollAll',focus:'utility'});
   assert.ok(result.ok);const plan=planService(s,enchanter,20,result.quote);assert.ok(plan.ok && plan.item);
   assert.ok(validItem(plan.item));assert.ok(charmThematicStat(plan.item,plan.item.affixes[0].stat));
+});
+
+test('a pre-uniform v4 pack repacks on load instead of reading as corrupt',async()=>{
+  const data=new Map<string,string>(),repo=new CharacterRepository({getItem:k=>data.get(k)??null,setItem:(k,v)=>{data.set(k,v);}});
+  const session=new CharacterSession(repo,4),sim=new Simulation(world,{spawn:false}),s=sim.player.character;
+  const gear=Array.from({length:6},(_,i)=>generateItem(7100+i,6,'ring',undefined,'common'));
+  const stones=Array.from({length:3},(_,i)=>generateItem(7200+i,6,'charm','jade-pebble','common'));
+  for(const item of [...gear,...stones])assert.ok(addInventoryItem(s,item));
+  refreshCharacter(sim.player);
+  assert.ok(await session.create(0,'Legacy',7319,sim.captureCheckpoint(),'legacy-pack',100));
+  const owned=[...s.inventory,...Object.values(s.equipped)].filter(Boolean).map(i=>i!.id).sort();
+  const record=JSON.parse(JSON.stringify(repo.read(0).record!)) as {version:number;checkpoint:{character:CharacterSheet}};
+  // Old 12x6 anchors: gear spread through cells 0-71, stones in the old charm rows 72-119.
+  record.version=4;
+  record.checkpoint.character.inventoryLayout=Object.fromEntries([...gear.map((item,i)=>[item.id,i*13]),...stones.map((item,i)=>[item.id,72+i*17])]);
+  const raw=JSON.stringify(record);
+  assert.equal(decodeCharacterSave(JSON.stringify({...record,version:CHARACTER_SAVE_VERSION})),null,'those anchors are out of range without the upgrade');
+  const decoded=decodeCharacterSave(raw);assert.ok(decoded);
+  assert.equal(decoded.version,CHARACTER_SAVE_VERSION);assert.equal(JSON.stringify(record),raw,'the parsed copy never writes back');
+  const loaded=decoded.checkpoint.character,layout=loaded.inventoryLayout!;
+  assert.deepEqual([...loaded.inventory,...Object.values(loaded.equipped)].filter(Boolean).map(i=>i!.id).sort(),owned,'no item is lost');
+  assert.ok(validPackLayout(loaded.inventory,layout));
+  assert.deepEqual(gear.map(i=>layout[i.id]),[0,1,2,3,4,5],'the bag opens compacted');
+  assert.deepEqual(stones.map(i=>layout[i.id]),[PACK_CELLS,PACK_CELLS+1,PACK_CELLS+2]);
+  assert.equal(activeCharms(loaded).length,stones.length);
 });

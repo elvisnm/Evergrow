@@ -1,7 +1,7 @@
-/* Physical pack: a quiet lattice behind full-footprint equipment silhouettes. */
-.inventory-pack { container-type: inline-size; min-width: 0; --pack-cell-max: 38px; --pack-gap: 3px; }
+/* Physical pack: a quiet lattice behind one uniform equipment silhouette per cell. */
+.inventory-pack { container-type: inline-size; min-width: 0; --pack-cell-max: 58px; --pack-gap: 3px; }
 /* Fit the actual panel, not the viewport. Reserve both borders, padding and
-   all eleven gutters; the same cell size also drives drag placement geometry. */
+   every inter-column gutter; the same cell size also drives drag placement geometry. */
 .character-tetris, .character-overflow-items {
   --pack-cell: min(var(--pack-cell-max), max(0px, calc((100cqw - 8px - (var(--pack-columns) - 1) * var(--pack-gap)) / var(--pack-columns))));
 }
@@ -14,7 +14,7 @@
 .character-bag.character-tetris, .character-overflow-items, .character-charm-grid {
   display: grid; grid-template-columns: repeat(var(--pack-columns), var(--pack-cell)); gap: var(--pack-gap); width: max-content;
 }
-.character-bag.character-tetris { position: relative; overflow: hidden; grid-template-rows: repeat(6, var(--pack-cell)); padding: 3px; background: #050d12; border: 1px solid #748d9638; }
+.character-bag.character-tetris { position: relative; overflow: hidden; grid-template-rows: repeat(3, var(--pack-cell)); padding: 3px; background: #050d12; border: 1px solid #748d9638; }
 .character-grid-cell { box-sizing: border-box; min-width: 0; width: var(--pack-cell); height: var(--pack-cell); padding: 0; background: #101b22; border: 1px solid #73929819; border-radius: 0; box-shadow: inset 0 1px #95b9bf06; }
 .character-grid-cell:hover { background: #1a2b31; }
 .character-tetris .character-bag-slot, .character-overflow-items .character-bag-slot {
@@ -31,16 +31,16 @@
 .character-charms header span { display: flex; gap: 6px; align-items: center; }
 .character-charms .ui-icon { width: 14px; height: 14px; }
 .character-charms small { color: #7d8178; font-size: 11px; }
-.character-charm-grid { position:relative; grid-template-rows:repeat(4,var(--pack-cell)); padding: 3px; border: 1px solid #a6a08725; background: #111713; }
+.character-charm-grid { position:relative; grid-template-rows:repeat(3,var(--pack-cell)); padding: 3px; border: 1px solid #a6a08725; background: #111713; }
 .character-charm-grid .character-grid-cell { height: var(--pack-cell); display: grid; place-items: center; color: #b0a57938; border: 1px solid #a1c8bf22; background: #b0a57904; }
 .character-overflow { margin-top: 20px; border-top: 1px solid #cba67566; padding-top: 12px; }
 .character-overflow header { color: #dbc194; font-size: 14px; margin-bottom: 10px; }
 .character-overflow header small { display: block; font-size: 11px; color: #aaa796; margin-top: 4px; }
 .character-overflow-items { grid-auto-rows: var(--pack-cell); grid-auto-flow: row dense; }
-@media (min-width: 1550px) { .inventory-pack { --pack-cell-max: 43px; } }
-@media (max-width: 1180px) { .inventory-pack { --pack-cell-max: 32px; } }
+@media (min-width: 1550px) { .inventory-pack { --pack-cell-max: 66px; } }
+@media (max-width: 1180px) { .inventory-pack { --pack-cell-max: 49px; } }
 @media (prefers-reduced-motion: reduce) { .character-bag-slot { transition: none; } }
-.character-pack-placement { position: absolute; box-sizing: border-box; z-index: 4; pointer-events: none; border: 2px solid #98e8b2; background: #6adb9629; box-shadow: 0 0 12px #7ee69e35; }
+.character-pack-placement { position: absolute; box-sizing: border-box; width: var(--pack-cell); height: var(--pack-cell); z-index: 4; pointer-events: none; border: 2px solid #98e8b2; background: #6adb9629; box-shadow: 0 0 12px #7ee69e35; }
 .character-pack-placement.is-invalid { border-color: #e18b88; background: #d669692e; box-shadow: none; }
 .character-pack-placement[hidden] { display: none; }
 

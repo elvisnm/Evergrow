@@ -67,7 +67,7 @@ test('appearance survives character creation, durable edits and checkpoint resto
 test('save validation rejects missing v4 appearance and unsupported schemas without repairing their payload',()=>{
   const sim=new Simulation(world,{spawn:false}),record={version:CHARACTER_SAVE_VERSION,id:'look-test',name:'Rowan',createdAt:1,updatedAt:1,worldSeed:7319,worldVersion:5,checkpoint:sim.captureCheckpoint()};
   assert.ok(decodeCharacterSave(JSON.stringify(record)));
-  for(const version of [1,2,5])assert.equal(decodeCharacterSave(JSON.stringify({...record,version})),null);
+  for(const version of [1,2,6])assert.equal(decodeCharacterSave(JSON.stringify({...record,version})),null);
   for(const invalid of [undefined,{...look(),armorTints:{chest:'invalid'}}]){
     const candidate=structuredClone(record);candidate.checkpoint.character.look=invalid as CharacterLook;
     assert.equal(decodeCharacterSave(JSON.stringify(candidate)),null);
@@ -88,7 +88,8 @@ function preEditorSave(){
 test('v3 migration supplies the default look while preserving every other saved field and the original bytes',()=>{
   const old=preEditorSave(),raw=JSON.stringify(old),migrated=decodeCharacterSave(raw);
   assert.ok(migrated);
-  assert.deepEqual(migrated,{...old,version:4,checkpoint:{...old.checkpoint,character:{...old.checkpoint.character,look:createCharacterLook()}}});
+  const ring=old.checkpoint.character.inventory[50]!;
+  assert.deepEqual(migrated,{...old,version:CHARACTER_SAVE_VERSION,checkpoint:{...old.checkpoint,character:{...old.checkpoint.character,look:createCharacterLook(),inventoryLayout:{[ring.id]:0}}}},'the pre-uniform pack opens compacted');
   assert.equal(raw,JSON.stringify(old));
   assert.equal(migrated.checkpoint.character.look.showHelmet,false);
   assert.deepEqual(decodeCharacterSave(JSON.stringify(migrated)),migrated);
@@ -113,7 +114,7 @@ test('v3 slots migrate on read and save v4 durably with failure and stale-writer
   fail=true;assert.equal(await session.save(loaded.checkpoint,3),false);assert.equal(data.get(key),raw);
   fail=false;
   const edited=structuredClone(loaded.checkpoint);edited.character.look=look();
-  assert.ok(await session.save(edited,4));assert.equal(JSON.parse(data.get(key)!).version,4);
+  assert.ok(await session.save(edited,4));assert.equal(JSON.parse(data.get(key)!).version,CHARACTER_SAVE_VERSION);
   assert.deepEqual((await new CharacterSession(repo,5).load(0))!.checkpoint,edited);
   assert.equal(await other.save(loaded.checkpoint,5),false);
   assert.deepEqual(repo.read(0).record!.checkpoint,edited);

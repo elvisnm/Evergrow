@@ -150,7 +150,8 @@ test('new encounter state and old v4/v3 saves decode without resetting character
  await executeEvent(sim,site,null,ok);
  const checkpoint=sim.captureCheckpoint();checkpoint.encounterScales={'site:7319:camp':captureEncounterScale(getZoneAt(0,0),8)};
  const save={version:4,id:'compatible',name:'Wayfarer',worldSeed:7319,worldVersion:9,createdAt:1,updatedAt:2,checkpoint};
- const decoded=decodeCharacterSave(JSON.stringify(save));assert.ok(decoded);assert.deepEqual(decoded.checkpoint,checkpoint);
+ const decoded=decodeCharacterSave(JSON.stringify(save));assert.ok(decoded);
+ assert.deepEqual(decoded.checkpoint,{...checkpoint,character:{...checkpoint.character,inventoryLayout:{}}},'a pre-uniform pack repacks densely and changes nothing else');
  const legacy=structuredClone(save);delete legacy.checkpoint.encounterScales;legacy.checkpoint.events=freshEvents();
  assert.ok(decodeCharacterSave(JSON.stringify(legacy)));
  const oldAppearance=JSON.parse(JSON.stringify(legacy));oldAppearance.version=3;delete oldAppearance.checkpoint.character.look;
