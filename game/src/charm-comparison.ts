@@ -1,5 +1,5 @@
 import type { CharacterSheet, Item } from './character-types.ts';
-import { activeCharms, compactPackLayout, findPackSpace, packOccupancy, packSpaceProblem, resolvePackLayout } from './inventory-grid.ts';
+import { activeCharms, findPackSpace, packOccupancy, packSpaceProblem, resolvePackLayout } from './inventory-grid.ts';
 import { compareCharacterStats } from './equipment-preview.ts';
 
 /** A read-only build comparison. Storage transfers still require a storage chest. */
@@ -18,7 +18,7 @@ export function previewCharmReplacement(sheet: CharacterSheet, level: number, ca
   if(index<0)return fail('Make room in the charm grid.');
   const cell=findPackSpace(item,packOccupancy(inventory,layout));
   inventory[index]=item;
-  let nextLayout=cell===null?compactPackLayout(inventory):{...layout,[item.id]:cell};
+  let nextLayout=cell===null?resolvePackLayout({inventory}):{...layout,[item.id]:cell};
   if(inventory.some(i=>i?.kind==='charm'&&nextLayout[i.id]===undefined))return fail(packSpaceProblem({...sheet,inventory:inventory.map(i=>i?.id===item.id?null:i)},item));
   // Keep the equipment bag fixed; the fallback only proposes rearranging charms.
   nextLayout={...Object.fromEntries(Object.entries(layout).filter(([id])=>inventory.find(i=>i?.id===id)?.kind!=='charm')),

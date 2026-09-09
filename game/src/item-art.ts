@@ -13,7 +13,24 @@ import { type Point } from './art-primitives.ts';
 const safeColor = (value: string) => /^#[0-9a-f]{6}$/i.test(value) ? value : '#798590';
 const escape = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
 
+/** Blades hang diagonally in every icon. Bows draw shallower, but a square pack cell needs
+ * a steeper bow than the 48px icon's -18 to keep a longbow off the diagonal sliver. */
+const WEAPON_ICON_TILT = 52, BOW_ICON_TILT = 34;
+/** A 58px cell wants sub-pixel headroom for the fine detail pass, and a proportional
+ * edge margin instead of the fixed 16/18 units tuned for tall multi-cell boxes. */
+const PACK_ICON_UNIT = 64, PACK_ICON_INSET = .12, PACK_ICON_SQUARE = .8;
+
 const dropShapes = new WeakMap<Item, readonly GearShape[]>();
+
+type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
+
+/** Shared rotate-and-measure: the extent a group draws under an SVG rotate() of the same angle. */
+function rotatedBounds(shapes: readonly GearShape[], degrees: number): Bounds {
+  const angle = degrees * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  const points = shapes.flatMap(shape => shape.points.map(([x, y]) => [x * cos - y * sin, x * sin + y * cos]));
+  const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+}
 
 /** Small world drops preserve the equipped silhouette and material. The geometry
  * cache follows the item lifetime; it does not accumulate an unbounded ID map. */
@@ -80,11 +97,8 @@ export function itemIconSVG(item: Item, size = 48): string {
       const visual = item.weapon?.visual ?? STARTING_SWORD.visual;
       const shapes = weaponShapes(visual);
       if (shapes.length === 0) { shape = ''; break; }
-      const degrees = visual.kind === 'bow' ? -18 : -52;
-      const angle = degrees * Math.PI / 180;
-      const points = shapes.flatMap(shape => shape.points.map(([x, y]) => [x * Math.cos(angle) - y * Math.sin(angle), x * Math.sin(angle) + y * Math.cos(angle)]));
-      const minX = Math.min(...points.map(p => p[0])), maxX = Math.max(...points.map(p => p[0]));
-      const minY = Math.min(...points.map(p => p[1])), maxY = Math.max(...points.map(p => p[1]));
+      const degrees = visual.kind === 'bow' ? -18 : -WEAPON_ICON_TILT;
+      const { minX, maxX, minY, maxY } = rotatedBounds(shapes, degrees);
       const occupancy = visual.kind === 'wand' ? .72 : visual.kind === 'dagger' ? .78 : visual.kind === 'mace' && visual.length < 26 ? .9 : 1;
       const scale = occupancy * Math.min(37 / Math.max(1, maxX - minX), 40 / Math.max(1, maxY - minY));
       shape = `<g transform="translate(24 24) scale(${scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2}) rotate(${degrees})">${detailed(shapes)}</g>`;
@@ -123,18 +137,65 @@ export function itemIconSVG(item: Item, size = 48): string {
     <ellipse cx="24" cy="42" rx="15" ry="3" fill="#05090e" opacity=".45"/>${shape}</svg>`;
 }
 
-/** Upright, aspect-correct art for rectangular pack footprints. */
+/** Reposition a shape group into one measurable point space, mirroring an SVG
+ * `translate(x y) [scale(-1 1)] rotate(degrees)` chain. */
+function placedShapes(shapes: readonly GearShape[], x: number, y: number, degrees: number, flip: 1 | -1): GearShape[] {
+  const angle = degrees * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  return shapes.map(shape => ({ ...shape, points: shape.points.map(([px, py]): Point =>
+    [x + flip * (px * cos - py * sin), y + px * sin + py * cos]) }));
+}
+
+/** Pack silhouettes reuse the worn presentation. Chest armor draws bare as a world drop;
+ * the icon adds the same shoulders and backing plate `itemIconSVG` composes, so the
+ * drawn box is wide rather than tall. */
+function packSilhouette(item: Item): readonly GearShape[] {
+  if (item.kind === 'weapon') return weaponShapes(item.weapon?.visual ?? STARTING_SWORD.visual);
+  if (item.kind !== 'chest') return itemDropShapes(item);
+  const { base, shadow, edge, trim } = item.appearance;
+  const piece: ArmorPiece = { style: item.appearance.style, seed: item.seed, material: { base, shadow, edge, trim, surface: item.appearance.surface } };
+  const shoulder = armorShapes('shoulder', piece);
+  return [
+    { points: [[-5, -5], [5, -5], [6, 9], [3, 11], [-3, 11], [-6, 9]] as Point[], fill: shadow },
+    ...placedShapes(shoulder, -6, -4, 18, 1), ...placedShapes(shoulder, 6, -4, 18, -1),
+    ...armorShapes('chest', piece),
+  ];
+}
+
+/** Only weapons, shields and charms tilt. A blade is a sliver a square cell cannot show upright;
+ * a shield turns toward the diagonal until it reads near-square, and a charm stone has no upright
+ * to lose, so the same aspect rule wins back the size standing them on end had cost. Every other
+ * kind stays upright, which reads more legibly than its own rotated bounding box allowed.
+ * This is only a candidate: the angle comes from the upright aspect alone, so a near-square
+ * silhouette can be turned past its own optimum. `itemPackIconSVG` measures it against upright
+ * and discards it when it loses, which is what makes the never-worse-than-upright rule hold. */
+function packTiltDegrees(item: Item, dx: number, dy: number): number {
+  if (item.kind === 'weapon') return item.weapon?.family === 'bow' ? -BOW_ICON_TILT : -WEAPON_ICON_TILT;
+  if (item.kind !== 'shield' && item.kind !== 'charm') return 0;
+  const aspect = Math.min(dx, dy) / Math.max(1, dx, dy);
+  return -WEAPON_ICON_TILT * Math.max(0, Math.min(1, (PACK_ICON_SQUARE - aspect) / PACK_ICON_SQUARE));
+}
+
+/** The placement a pack cell actually draws. `packTiltDegrees` only proposes an angle, so both
+ * it and upright are fitted into the real box and the larger wins; a tie keeps the tilt, leaving
+ * every silhouette the angle already won unchanged. This is what guarantees no kind can ever
+ * render smaller than it would upright. */
+function packIconFit(item: Item, shapes: readonly GearShape[], width: number, height: number) {
+  const w = width * PACK_ICON_UNIT, h = height * PACK_ICON_UNIT, inset = 2 * PACK_ICON_INSET * PACK_ICON_UNIT;
+  const fitted = (box: Bounds) => Math.min((w - inset) / Math.max(1, box.maxX - box.minX), (h - inset) / Math.max(1, box.maxY - box.minY));
+  const box = rotatedBounds(shapes, 0), upright = fitted(box);
+  const degrees = Math.round(packTiltDegrees(item, box.maxX - box.minX, box.maxY - box.minY) * 10) / 10;
+  const tilted = rotatedBounds(shapes, degrees), scale = fitted(tilted);
+  return scale >= upright ? { degrees, scale, upright, box: tilted } : { degrees: 0, scale: upright, upright, box };
+}
+
+/** Uniform 1x1 pack cells; the box stays general so a caller may still ask for a wider one. */
 export function itemPackIconSVG(item: Item, width: number, height: number): string {
-  let shapes = item.kind === 'weapon' ? weaponShapes(item.weapon?.visual ?? STARTING_SWORD.visual) : itemDropShapes(item);
-  if (item.kind === 'weapon' && item.weapon?.family !== 'bow') shapes = shapes.map(shape => ({ ...shape, points: shape.points.map(([x, y]): Point => [y, -x]) }));
-  const points = shapes.flatMap(shape => shape.points);
-  if (!points.length) return '';
-  const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const w = width * 40, h = height * 40;
-  const scale = Math.min((w - 16) / Math.max(1, maxX - minX), (h - 18) / Math.max(1, maxY - minY));
+  const shapes = packSilhouette(item);
+  if (!shapes.some(shape => shape.points.length)) return '';
+  const { degrees, scale, box: { minX, maxX, minY, maxY } } = packIconFit(item, shapes, width, height);
+  const w = width * PACK_ICON_UNIT, h = height * PACK_ICON_UNIT;
   const prefix = `pack-${item.id.replace(/[^a-z0-9-]/gi, '')}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" aria-hidden="true" focusable="false"><g transform="translate(${w / 2} ${h / 2}) scale(${scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2})">${gearShapesSVG(shapes, true, prefix)}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" aria-hidden="true" focusable="false"><g transform="translate(${w / 2} ${h / 2}) scale(${scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2}) rotate(${degrees})">${gearShapesSVG(shapes, true, prefix)}</g></svg>`;
 }
 
 function armor(item: Item | null): ArmorPiece | null {

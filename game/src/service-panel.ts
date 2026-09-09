@@ -1,7 +1,7 @@
 import { storageTabCount, storageTabItems, hasStorageTab, MAX_STORAGE_TABS, nextStorageTabPrice } from './storage-content.ts';
 import { itemAffixCount } from './items.ts';
 import { bulkSaleItems, ITEM_LOCK_ICON } from './item-protection.ts';
-import { PACK_COLUMNS, PACK_ROWS, PACK_CELLS, CHARM_ROWS, resolvePackLayout, storageGridLayout, itemFootprint, canPackItem, packSpaceProblem } from './inventory-grid.ts';
+import { PACK_COLUMNS, PACK_ROWS, PACK_CELLS, CHARM_ROWS, resolvePackLayout, storageGridLayout, canPackItem, packSpaceProblem } from './inventory-grid.ts';
 import './inventory-pack.css';
 import { settlementBenefits } from './settlement-services.ts';
 import { vendorLevel } from './npcs.ts';
@@ -237,11 +237,11 @@ export class ServicePanel {
     const bag = root.querySelector<HTMLElement>('.character-bag')!, overflow = root.querySelector<HTMLElement>('.character-overflow-items')!;
     sheet.inventory.forEach((item,index)=>{
       if (!item) return;
-      const cell = this.cell(item, `bag:${index}`), position = layout[item.id], size = itemFootprint(item);
+      const cell = this.cell(item, `bag:${index}`), position = layout[item.id];
       cell.classList.add('character-bag-slot');
-      cell.style.gridColumn = position === undefined ? `span ${size.width}` : `${position % PACK_COLUMNS + 1} / span ${size.width}`;
-      cell.style.gridRow = position === undefined ? `span ${size.height}` : `${Math.floor((position >= PACK_CELLS ? position-PACK_CELLS : position) / PACK_COLUMNS) + 1} / span ${size.height}`;
-      cell.querySelector('svg')?.remove(); cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item,size.width,size.height));
+      cell.style.gridColumn = position === undefined ? '' : String(position % PACK_COLUMNS + 1);
+      cell.style.gridRow = position === undefined ? '' : String(Math.floor((position >= PACK_CELLS ? position-PACK_CELLS : position) / PACK_COLUMNS) + 1);
+      cell.querySelector('svg')?.remove(); cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item,1,1));
       (position === undefined ? overflow : position>=PACK_CELLS ? root.querySelector<HTMLElement>('.character-charm-grid')! : bag).append(cell);
     });
     root.querySelector<HTMLElement>('.character-overflow')!.hidden = !overflow.childElementCount;
@@ -262,12 +262,12 @@ export class ServicePanel {
     items.forEach((item, slot) => {
       const position = layout.cells[slot];
       if (!item || position === null) return;
-      const cell = this.cell(item, `stash:${this.storageTab * STASH_CAPACITY + slot}`), size = itemFootprint(item);
+      const cell = this.cell(item, `stash:${this.storageTab * STASH_CAPACITY + slot}`);
       cell.classList.add('character-bag-slot');
-      cell.style.gridColumn = `${position % PACK_COLUMNS + 1} / span ${size.width}`;
-      cell.style.gridRow = `${Math.floor(position / PACK_COLUMNS) + 1} / span ${size.height}`;
+      cell.style.gridColumn = String(position % PACK_COLUMNS + 1);
+      cell.style.gridRow = String(Math.floor(position / PACK_COLUMNS) + 1);
       cell.querySelector('svg')?.remove();
-      cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item, size.width, size.height));
+      cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item, 1, 1));
       grid.append(cell);
     });
   }

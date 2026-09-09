@@ -46,7 +46,7 @@ The World workspace’s Dungeon tool (`/dungeon.html?view=gallery&seed=7319`) co
 
 The town service study accepts `tier=village` or `tier=city` to select a real generated town of that tier. It supports all service roles and uses disposable memory.
 
-The local `/character.html` review now includes the 12×6 spatial pack, upright item art, inline sorting, drag footprint previews and four dedicated charm rows. It uses the runtime inventory and disposable gear; no playable saves are accessed.
+The local `/character.html` review now includes the 8×3 uniform pack, item art, inline sorting, drag placement previews and three dedicated charm rows. It uses the runtime inventory and disposable gear; no playable saves are accessed.
 
 ### Charm review
 

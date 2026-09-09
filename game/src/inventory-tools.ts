@@ -1,5 +1,5 @@
 import { hasStorageTab, storageTabItems, STASH_CAPACITY } from './storage-content.ts';
-import { resolvePackLayout, compactPackLayout, storageGridLayout, itemFootprint, type PackLayout } from './inventory-grid.ts';
+import { resolvePackLayout, type PackLayout } from './inventory-grid.ts';
 import type { ActionResult, CharacterSheet, Item, ItemTier } from './character-types.ts';
 import { EQUIPMENT_SLOTS, ITEM_KINDS } from './items.ts';
 import { itemFitsSlot, planEquipmentChange } from './inventory.ts';
@@ -26,11 +26,6 @@ function orderedItems(sheet: CharacterSheet, items: Array<Item | null>, mode: In
   const recency = new Map((sheet.recentItems ?? []).map((id, index) => [id, index]));
   return [...items].sort((a, b) => {
     if (!a || !b) return a ? -1 : b ? 1 : 0;
-    if (mode === 'compact') {
-      const sa = itemFootprint(a), sb = itemFootprint(b);
-      const size = sb.height - sa.height || sb.width - sa.width;
-      if (size) return size;
-    }
     const comparisons: Record<SortPriority, number> = {
       rarity: tiers.indexOf(b.tier) - tiers.indexOf(a.tier),
       type: ITEM_KINDS.indexOf(a.kind) - ITEM_KINDS.indexOf(b.kind),
@@ -46,11 +41,7 @@ export function sortInventory(sheet: CharacterSheet, mode: InventorySort): Actio
   if (!['rarity', 'type', 'recent', 'compact'].includes(mode)) return { ok: false, message: 'Unknown inventory sort.' };
   const inventory = orderedItems(sheet, sheet.inventory, mode);
   const before = resolvePackLayout(sheet);
-  let layout = resolvePackLayout({ inventory });
-  if(mode==='compact'||Object.keys(layout).length<Object.keys(before).length){
-    const packed=compactPackLayout(inventory);
-    if(Object.keys(packed).length>=Object.keys(layout).length)layout=packed;
-  }
+  const layout = resolvePackLayout({ inventory });
   for(const charm of [false,true]){
     const overflowBefore=sheet.inventory.filter(item=>item&&(item.kind==='charm')===charm&&before[item.id]===undefined).length;
     const overflowAfter=inventory.filter(item=>item&&(item.kind==='charm')===charm&&layout[item.id]===undefined).length;
@@ -64,9 +55,7 @@ export function sortInventory(sheet: CharacterSheet, mode: InventorySort): Actio
 export function sortStorage(sheet: CharacterSheet, tab = 0): ActionResult {
   if (!hasStorageTab(sheet,tab)) return {ok:false,message:'This storage tab is locked.'};
   if (!sheet.stash) return { ok: true };
-  const items = storageTabItems(sheet,tab), ordered = orderedItems(sheet, items, 'compact');
-  if (storageGridLayout(ordered).rows > storageGridLayout(items).rows)
-    return { ok: false, message: 'This arrangement needs more space. Your storage is unchanged.' };
+  const ordered = orderedItems(sheet, storageTabItems(sheet,tab), 'compact');
   sheet.stash = [...sheet.stash];
   sheet.stash.splice(tab * STASH_CAPACITY, STASH_CAPACITY, ...ordered);
   return { ok: true };

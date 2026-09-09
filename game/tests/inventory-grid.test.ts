@@ -1,47 +1,61 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCharacterSheet, generateItem } from '../src/items.ts';
-import { itemFootprint, storageGridLayout, PACK_CELLS, PACK_COLUMNS, resolvePackLayout, footprintCells, validPackLayout, canPackItem } from '../src/inventory-grid.ts';
-import { addInventoryItem, moveInventoryItem, equipItem, unequipItem } from '../src/inventory.ts';
+import { itemFootprint, storageGridLayout, PACK_CELLS, PACK_COLUMNS, INVENTORY_CELLS, resolvePackLayout, footprintCells, validPackLayout, canPackItem } from '../src/inventory-grid.ts';
+import { CHARM_SIZES } from '../src/charm-content.ts';
+import { WEAPON_PROFILES } from '../src/weapon-content.ts';
+import { addInventoryItem, moveInventoryItem, planInventoryMove, equipItem, unequipItem } from '../src/inventory.ts';
 import { sortInventory } from '../src/inventory-tools.ts';
 
 const gear=(seed:number,kind:Parameters<typeof generateItem>[2],profile?:string)=>generateItem(seed,1,kind,profile,'common');
-test('physical equipment sizes are stable across rarity and match one/two-handed silhouettes',()=>{
-  assert.deepEqual(itemFootprint(gear(1,'weapon','greatblade')),{width:2,height:4});
-  assert.deepEqual(itemFootprint(gear(2,'weapon','rondel-dagger')),{width:1,height:2});
-  assert.deepEqual(itemFootprint(gear(3,'weapon','star-wand')),{width:1,height:2});
-  assert.deepEqual(itemFootprint(gear(4,'chest')),{width:2,height:3});
+test('every carried item occupies one uniform cell while its size class stays authored',()=>{
+  assert.deepEqual(itemFootprint(gear(1,'weapon','greatblade')),{width:1,height:1});
+  assert.deepEqual(itemFootprint(gear(2,'weapon','rondel-dagger')),{width:1,height:1});
+  assert.deepEqual(itemFootprint(gear(3,'weapon','star-wand')),{width:1,height:1});
+  assert.deepEqual(itemFootprint(gear(4,'chest')),{width:1,height:1});
   assert.deepEqual(itemFootprint(gear(5,'ring')),{width:1,height:1});
+  // Size class is content data and still drives balance; it is not a spatial measurement.
+  assert.deepEqual(WEAPON_PROFILES.find(p=>p.id==='greatblade')!.hands,2);
+  assert.deepEqual(CHARM_SIZES.map(size=>[size.width,size.height]),[[1,1],[1,2],[2,2],[1,3],[2,3],[2,4]]);
 });
-test('footprints never wrap rows or enter the four reserved charm rows',()=>{
-  const chest=gear(6,'chest');
-  assert.equal(footprintCells(chest,PACK_COLUMNS-1),null);
-  assert.equal(footprintCells(chest,PACK_CELLS-PACK_COLUMNS),null);
+test('cells never cross the pack/charm boundary and reject invalid indices',()=>{
+  const chest=gear(6,'chest'),charm=gear(7,'charm','jade-monolith');
+  assert.deepEqual(footprintCells(chest,PACK_COLUMNS-1),[PACK_COLUMNS-1]);
+  assert.deepEqual(footprintCells(chest,PACK_CELLS-PACK_COLUMNS),[PACK_CELLS-PACK_COLUMNS]);
   assert.equal(footprintCells(chest,PACK_CELLS),null);
+  assert.equal(footprintCells(chest,INVENTORY_CELLS),null);
+  assert.equal(footprintCells(chest,-1),null);
   assert.equal(footprintCells(chest,NaN),null);
+  assert.equal(footprintCells(charm,PACK_CELLS-1),null);
+  assert.deepEqual(footprintCells(charm,PACK_CELLS),[PACK_CELLS]);
+  assert.deepEqual(footprintCells(charm,INVENTORY_CELLS-1),[INVENTORY_CELLS-1]);
 });
-test('placing and swapping uses all occupied cells, preserves records and rejects collisions atomically',()=>{
-  const s=createCharacterSheet(),a=gear(10,'chest'),b=gear(11,'chest'),ring=gear(12,'ring');
-  assert.ok(addInventoryItem(s,a));assert.ok(addInventoryItem(s,b));assert.ok(addInventoryItem(s,ring));
+test('placing and swapping uses uniform cells, preserves records and rejects invalid targets atomically',()=>{
+  const s=createCharacterSheet(),a=gear(10,'chest'),b=gear(11,'chest'),ring=gear(12,'ring'),charm=gear(13,'charm','jade-monolith');
+  for(const item of [a,b,ring,charm])assert.ok(addInventoryItem(s,item));
   const before=resolvePackLayout(s), inventory=[...s.inventory];
-  assert.ok(moveInventoryItem(s,0,before[b.id]).ok);
-  assert.equal(s.inventoryLayout![b.id],before[a.id]);assert.deepEqual(s.inventory,inventory);
-  assert.ok(moveInventoryItem(s,2,PACK_CELLS-1).ok);
+  assert.ok(moveInventoryItem(s,0,before[b.id]).ok,'a move onto an occupied cell swaps both items');
+  assert.equal(s.inventoryLayout![b.id],before[a.id]);assert.equal(s.inventoryLayout![a.id],before[b.id]);
+  assert.deepEqual(s.inventory,inventory,'the bag array is never reordered by a move');
+  assert.ok(moveInventoryItem(s,2,PACK_CELLS-1).ok);assert.equal(s.inventoryLayout![ring.id],PACK_CELLS-1);
+  assert.ok(moveInventoryItem(s,0,PACK_COLUMNS-1).ok,'the last column of a row is an ordinary cell');
   const snapshot=structuredClone(s);
-  assert.equal(moveInventoryItem(s,0,PACK_COLUMNS-1).ok,false);assert.deepEqual(s,snapshot);
-  assert.equal(moveInventoryItem(s,2,1).ok,false,'a tiny ring cannot swap a chest into its occupied origin');
+  assert.equal(planInventoryMove(s,2,PACK_CELLS),null,'equipment never enters the charm grid');
+  assert.equal(moveInventoryItem(s,2,PACK_CELLS).ok,false);
+  assert.equal(moveInventoryItem(s,3,0).ok,false,'a stone never leaves the charm grid');
+  assert.equal(moveInventoryItem(s,2,INVENTORY_CELLS).ok,false);
   assert.deepEqual(s,snapshot);
 });
 test('old crowded bags keep overflow, block new loot and can recover by equipping or storing items',()=>{
   const s=createCharacterSheet(); s.inventory=Array.from({length:64},(_,i)=>gear(100+i,'chest'));
   const before=structuredClone(s),layout=resolvePackLayout(s);
-  assert.equal(Object.keys(layout).length,12);assert.deepEqual(s,before,'projection never mutates saves');
+  assert.equal(Object.keys(layout).length,PACK_CELLS);assert.deepEqual(s,before,'projection never mutates saves');
   assert.equal(addInventoryItem(s,gear(500,'ring')),false);assert.deepEqual(s,before);
   const overflow=s.inventory[63]!;s.equipped.chest=null;
   assert.ok(equipItem(s,63,1).ok);assert.equal(s.equipped.chest,overflow);
   assert.ok(validPackLayout(s.inventory,s.inventoryLayout));
 });
-test('all 72 cells are usable for jewelry, with no invisible item-count limit',()=>{
+test('all 24 pack cells are usable for jewelry, with no invisible item-count limit',()=>{
   const s=createCharacterSheet();s.inventory=Array(64).fill(null);
   for(let i=0;i<PACK_CELLS;i++)assert.ok(addInventoryItem(s,gear(600+i,'ring')));
   assert.equal(Object.keys(resolvePackLayout(s)).length,PACK_CELLS);
@@ -58,7 +72,7 @@ test('one-click packing is deterministic, preserves acquisition order, and never
 });
 test('unequip obeys physical placement and save validation rejects overlaps, non-owned IDs and charm cells',()=>{
   const s=createCharacterSheet();const helm=s.equipped.head!;
-  const snapshot=structuredClone(s);assert.equal(unequipItem(s,'head',PACK_CELLS-1).ok,false);assert.deepEqual(s,snapshot);
+  const snapshot=structuredClone(s);assert.equal(unequipItem(s,'head',PACK_CELLS).ok,false);assert.deepEqual(s,snapshot);
   assert.ok(unequipItem(s,'head',0).ok);assert.equal(s.inventoryLayout![helm.id],0);
   const ring=gear(990,'ring');assert.ok(addInventoryItem(s,ring));
   assert.ok(validPackLayout(s.inventory,s.inventoryLayout));
@@ -73,7 +87,7 @@ test('storage keeps saved slot identities and fits a full stash of large gear an
     ? gear(900+i,'charm','jade-monolith') : gear(900+i,'weapon','greatblade'));
   const before = JSON.stringify(stored), layout = storageGridLayout(stored), occupied = new Set<number>();
   assert.equal(layout.cells.length,96);
-  assert.ok(layout.rows > 8, 'large gear extends storage instead of hiding or rejecting owned items');
+  assert.ok(layout.rows > 8, 'a full stash extends past the default rows instead of hiding owned items');
   stored.forEach((item,slot) => {
     const cell = layout.cells[slot]! , size = itemFootprint(item);
     assert.equal(typeof cell,'number');

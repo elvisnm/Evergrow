@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateItem, deriveItem, createCharacterSheet, itemAffixCount, itemAffixPool } from '../src/items.ts';
 import { CHARM_PROFILES, CHARM_SIZES, CHARM_REWARD_CAPS } from '../src/charm-content.ts';
-import { activeCharms, PACK_CELLS, PACK_COLUMNS, INVENTORY_CELLS, resolvePackLayout, validPackLayout, itemFootprint } from '../src/inventory-grid.ts';
+import { activeCharms, PACK_CELLS, PACK_COLUMNS, CHARM_ROWS, INVENTORY_CELLS, resolvePackLayout, validPackLayout, itemFootprint } from '../src/inventory-grid.ts';
 import { addInventoryItem, moveInventoryItem } from '../src/inventory.ts';
 import { sortInventory } from '../src/inventory-tools.ts';
 import { deriveCharacterStats } from '../src/character-stats.ts';
@@ -26,8 +26,8 @@ test('all stone shapes and flavors share deterministic item recipes, size budget
   for(const profile of CHARM_PROFILES)for(const tier of ['common','magic','rare','epic','legendary'] as const){
     const item=generateItem(432,30,'charm',profile.id,tier);
     assert.deepEqual(item,generateItem(432,30,'charm',profile.id,tier));assert.deepEqual(deriveItem(item),item);assert.ok(validItem(item));
-    assert.equal(item.affixes.length,itemAffixCount(item));assert.deepEqual(itemFootprint(item),{width:profile.size.width,height:profile.size.height});
-    assert.ok(itemDropShapes(item).length>8);assert.match(itemIconSVG(item),/<svg/);assert.match(itemPackIconSVG(item,profile.size.width,profile.size.height),/<svg/);
+    assert.equal(item.affixes.length,itemAffixCount(item));assert.deepEqual(itemFootprint(item),{width:1,height:1});
+    assert.ok(itemDropShapes(item).length>8);assert.match(itemIconSVG(item),/<svg/);assert.match(itemPackIconSVG(item,1,1),/<svg/);
     for(const op of ['enhance','rerollAll','rerollOne','relevel'] as const)if(!improvementProblem(item,op,40,0))assert.ok(validItem(improveItem(item,op,40,871,0)));
     if(tier!=='legendary'&&!improvementProblem(item,'rarity',40)){const next=improveItem(item,'rarity',40,871);assert.ok(validItem(next));assert.equal(next.affixes.length,itemAffixCount(next));}
   }
@@ -41,8 +41,8 @@ test('pickups use only the charm grid, with level-gated bonuses and atomic place
   assert.equal(activeCharms(s).length,3);assert.equal(activeCharms(s,1).length,2);
   for(const item of [a,b,late])assert.ok(resolvePackLayout(s)[item.id]>=PACK_CELLS);
   const before=structuredClone(s);assert.equal(moveInventoryItem(s,0,0).ok,false);assert.deepEqual(s,before);
-  assert.equal(moveInventoryItem(s,1,PACK_CELLS+PACK_COLUMNS*3).ok,false,'no bottom overflow');
-  assert.ok(moveInventoryItem(s,2,PACK_CELLS+8).ok,'higher-level stones can be rearranged');
+  assert.equal(moveInventoryItem(s,1,INVENTORY_CELLS).ok,false,'no bottom overflow');
+  assert.ok(moveInventoryItem(s,2,PACK_CELLS+PACK_COLUMNS).ok,'higher-level stones can be rearranged');
   assert.ok(sortInventory(s,'compact').ok);assert.equal(activeCharms(s,1).length,2);
   assert.ok(validPackLayout(s.inventory,s.inventoryLayout));
   assert.equal(validPackLayout(s.inventory,{[a.id]:0}),false);
@@ -103,17 +103,17 @@ test('charms can be sold directly and item tooltips contain no stat explanations
   assert.doesNotMatch(markup,/ui-item-affix-note|affixes ·|Active|Place in charm grid/);
 });
 
-test('all 48 charm cells and 72 bag cells can be occupied without an invisible count limit',()=>{
+test('every charm cell and every bag cell can be occupied without an invisible count limit',()=>{
   const s=createCharacterSheet();
-  for(let i=0;i<48;i++){const item=stone(1000+i);assert.ok(addInventoryItem(s,item));}
+  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS;i++){const item=stone(1000+i);assert.ok(addInventoryItem(s,item));}
   assert.equal(addInventoryItem(s,stone(3000)),false,'no fallback into the empty bag');
-  for(let i=0;i<72;i++)assert.ok(addInventoryItem(s,generateItem(2000+i,1,'ring',undefined,'common')));
-  assert.equal(activeCharms(s).length,48);assert.equal(s.inventory.filter(Boolean).length,120);
+  for(let i=0;i<PACK_CELLS;i++)assert.ok(addInventoryItem(s,generateItem(2000+i,1,'ring',undefined,'common')));
+  assert.equal(activeCharms(s).length,PACK_COLUMNS*CHARM_ROWS);assert.equal(s.inventory.filter(Boolean).length,INVENTORY_CELLS);
   assert.equal(addInventoryItem(s,stone(3000)),false);assert.ok(validPackLayout(s.inventory,s.inventoryLayout));
 });
 
 test('a full equipment bag does not prevent charm collection',()=>{
   const s=createCharacterSheet();
-  for(let i=0;i<72;i++)assert.ok(addInventoryItem(s,generateItem(5000+i,1,'ring',undefined,'common')));
+  for(let i=0;i<PACK_CELLS;i++)assert.ok(addInventoryItem(s,generateItem(5000+i,1,'ring',undefined,'common')));
   assert.ok(addInventoryItem(s,stone()));assert.equal(activeCharms(s,1).length,1);
 });

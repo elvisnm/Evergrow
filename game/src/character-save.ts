@@ -1,5 +1,5 @@
 import { STASH_CAPACITY, MAX_STORAGE_TABS } from './storage-content.ts';
-import { validPackLayout } from './inventory-grid.ts';
+import { resolvePackLayout, validPackLayout } from './inventory-grid.ts';
 import { validEncounterScales } from './encounter-scaling.ts';
 import { validChronicle, type ChronicleProgress } from './chronicle.ts';
 import { validTreasureFlight } from './treasure-flight.ts';
@@ -26,7 +26,7 @@ import { xpForNextLevel } from './progression.ts';
 import { LOOT_RULES } from './combat-content.ts';
 
 export const CHARACTER_SLOT_COUNT = 8;
-export const CHARACTER_SAVE_VERSION = 4;
+export const CHARACTER_SAVE_VERSION = 5;
 // A payload safety bound, not a lifetime activity quota. Fail without evicting progress.
 export const SAVE_MAX_CODE_UNITS = 8 * 1024 * 1024;
 export interface CharacterCheckpoint {
@@ -79,7 +79,8 @@ function validSheet(v: unknown, level: number): v is CharacterSheet {
     && new Set(v.skillSlots.filter(Boolean)).size === v.skillSlots.filter(Boolean).length;
 }
 
-/** Upgrade pre-editor v3 appearance on the parsed copy, then validate the entire checkpoint. */
+/** Upgrade pre-editor v3 appearance and pre-uniform v4 pack cells on the parsed copy,
+ * then validate the entire checkpoint. */
 export function decodeCharacterSave(raw: string): CharacterSave | null {
   if (raw.length > SAVE_MAX_CODE_UNITS) return null;
   try {
@@ -87,7 +88,15 @@ export function decodeCharacterSave(raw: string): CharacterSave | null {
     if (object(v) && v.version === 3 && object(v.checkpoint) && object(v.checkpoint.character)) {
       // v3 predates appearance. Preserve any existing recipe and let validation reject malformed data.
       if (!Object.hasOwn(v.checkpoint.character, 'look')) v.checkpoint.character.look = createCharacterLook();
+      v.version = 4;
+    }
+    // v4 anchors were spread across multi-cell footprints, so they fall outside the uniform
+    // grid. Drop the layout before validation reads it and repack it densely once, afterwards.
+    let compact = false;
+    if (object(v) && v.version === 4 && object(v.checkpoint) && object(v.checkpoint.character)) {
+      delete v.checkpoint.character.inventoryLayout;
       v.version = CHARACTER_SAVE_VERSION;
+      compact = true;
     }
     if (!object(v) || v.version !== CHARACTER_SAVE_VERSION || !text(v.id, 64) || !/^[a-zA-Z0-9-]+$/.test(v.id)
       || !text(v.name, 24) || !integer(v.createdAt) || !integer(v.updatedAt) || v.updatedAt < v.createdAt
@@ -131,6 +140,7 @@ export function decodeCharacterSave(raw: string): CharacterSave | null {
     }
     // Normalize the validated parsed copy, including stored dungeon loot and buyback.
     for (const item of items) Object.assign(item, roundItemStats(rebalanceCharm(item)));
+    if (compact) p.character.inventoryLayout = resolvePackLayout({ inventory: p.character.inventory });
     return v as unknown as CharacterSave;
   } catch { return null; }
 }

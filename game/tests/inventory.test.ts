@@ -60,10 +60,10 @@ test('bag movement changes footprint positions without changing item ownership',
   sheet.inventory[0]=first; sheet.inventory[1]=second;
   assert.ok(moveInventoryItem(sheet,0,1).ok);
   assert.equal(sheet.inventoryLayout![first.id],1); assert.equal(sheet.inventoryLayout![second.id],0);
-  assert.ok(moveInventoryItem(sheet,0,59).ok); assert.equal(sheet.inventoryLayout![first.id],59);
+  assert.ok(moveInventoryItem(sheet,0,20).ok); assert.equal(sheet.inventoryLayout![first.id],20);
   const stable=structuredClone(sheet);
   assert.equal(moveInventoryItem(sheet,2,3).ok,false); assert.equal(moveInventoryItem(sheet,0,-1).ok,false);
-  assert.deepEqual(sheet,stable); assert.ok(moveInventoryItem(sheet,0,59).ok);
+  assert.deepEqual(sheet,stable); assert.ok(moveInventoryItem(sheet,0,20).ok);
   assert.equal(sheet.inventory[0],first); assert.equal(sheet.inventory[1],second);
 });
 
@@ -136,15 +136,17 @@ test('two-handed equipment stows an offhand atomically, rejecting a full bag wit
   assert.deepEqual(ids(sheet), beforeIds.filter(id => !removed.includes(id)));
 });
 
-test('an offhand needs enough physical room to stow a larger two-handed weapon', () => {
-  const sheet = characterWithTestLoot(); fillBag(sheet);
-  const before = structuredClone(sheet), sword = sheet.equipped.weapon, shield = sheet.inventory[4];
-  assert.equal(equipItem(sheet,4,1).ok,false); assert.deepEqual(sheet,before);
-  sheet.inventory=sheet.inventory.map((item,index)=>index===4?item:null);
+test('an offhand needs a free pack cell to stow a two-handed weapon', () => {
+  // The shield sits in overflow, so equipping it frees no cell for the displaced sword.
+  const sheet = characterWithTestLoot(), shield = sheet.inventory[4];
+  sheet.inventory[4]=null; sheet.inventory[100]=shield; fillBag(sheet);
+  const before = structuredClone(sheet), sword = sheet.equipped.weapon;
+  assert.equal(equipItem(sheet,100,1).ok,false); assert.deepEqual(sheet,before);
+  sheet.inventory=sheet.inventory.map((item,index)=>index===100?item:null);
   const beforeIds=ids(sheet);
-  assert.ok(equipItem(sheet, 4, 1).ok);
+  assert.ok(equipItem(sheet, 100, 1).ok);
   assert.equal(sheet.equipped.weapon, null); assert.equal(sheet.equipped.offhand, shield);
-  assert.equal(sheet.inventory[4], sword); assert.deepEqual(ids(sheet), beforeIds);
+  assert.equal(sheet.inventory[100], sword); assert.deepEqual(ids(sheet), beforeIds);
 });
 
 test('hand conflict resolution can reuse the source cell when the receiving hand was empty', () => {

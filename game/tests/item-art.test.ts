@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCharacterSheet, generateItem, ITEM_KINDS } from '../src/items.ts';
-import { itemIconSVG, itemDropShapes, outfitFromEquipment } from '../src/item-art.ts';
+import { itemIconSVG, itemDropShapes, itemPackIconSVG, outfitFromEquipment } from '../src/item-art.ts';
 import { WEAPON_PROFILES, SHIELD_PROFILES } from '../src/weapon-content.ts';
+import { CHARM_SIZES } from '../src/charm-content.ts';
 import { armorShapes } from '../src/armor-shapes.ts';
 
 test('every equipment family generates distinct vector art without external resources', () => {
@@ -69,4 +70,79 @@ test('helmet and cuirass icons reuse the actual equipped plate geometry', () => 
       }
     }
   }
+});
+
+test('only weapons, shields and charms tilt inside a pack cell; every other kind stays upright', () => {
+  const tilt = (item: Parameters<typeof itemPackIconSVG>[0]) => {
+    const icon = itemPackIconSVG(item, 1, 1);
+    const degrees = /rotate\((-?[\d.]+)\)/.exec(icon);
+    assert.ok(degrees, `${item.name} packs a rotation`);
+    return Number(degrees![1]);
+  };
+  for (const kind of ITEM_KINDS) {
+    if (kind === 'weapon' || kind === 'shield' || kind === 'charm') continue;
+    for (const seed of [17, 419, 8901]) assert.equal(tilt(generateItem(seed, 3, kind)), 0, `${kind} packs upright`);
+  }
+  for (const size of CHARM_SIZES) {
+    // A stone only keeps the turn when it actually fits larger, so an elongated class turns on
+    // most seeds rather than every one; a pebble has no seed that gains anything by turning.
+    const tilts = [17, 419, 8901].map(seed => tilt(generateItem(seed, 3, 'charm', `jade-${size.id}`)));
+    if (size.id === 'pebble') assert.ok(tilts.every(degrees => degrees === 0), 'a square pebble has nothing to gain by turning');
+    else assert.ok(tilts.some(degrees => degrees < 0), `an elongated ${size.id} turns toward the diagonal`);
+  }
+  for (const profile of WEAPON_PROFILES) {
+    const item = generateItem(419, 3, 'weapon', profile.id);
+    assert.equal(tilt(item), item.weapon?.family === 'bow' ? -34 : -52, `${profile.id} keeps its authored tilt`);
+  }
+  assert.ok(SHIELD_PROFILES.some(profile => tilt(generateItem(419, 3, 'shield', profile.id)) < 0),
+    'elongated shields still turn toward the diagonal');
+});
+
+test('no kind ever packs smaller than it would upright', () => {
+  // The tilt angle is picked from the upright aspect alone, so a near-square silhouette can be
+  // turned past its own optimum. Every kind and every charm size class is swept because that is
+  // a property of the formula, not of any one kind.
+  //
+  // Only the drawn SVG is read. Its polygon points are the untilted silhouette — the rotate()
+  // sits inside the transform, after the scale — so rotating them by 0 and by the emitted angle
+  // reproduces both boxes the module weighed. Every cell draws scale(CELL / largest extent) for
+  // one CELL shared by the whole sweep (asserted below), so the drawn scale beats the upright one
+  // exactly when the tilted box is no larger, and CELL cancels out of that comparison.
+  //
+  // Points are emitted rounded to 2dp, so a measured extent misses the real one by up to .01
+  // across the box, and this sweep — fixed seeds, no randomness — shows a worst ratio error of
+  // .03% against the module's own arithmetic. The .1% tolerance below sits 3x above that and 5x
+  // under the regression it exists to catch: dropping the tiebreak in `itemPackIconSVG` packs
+  // charm heart at seed 419 to .50% under upright, and seed 0 — where the sweep trips first — to
+  // .41%. Silhouettes stay 11 units or wider (asserted) so the rounding stays this small.
+  const TOLERANCE = .001;
+  const packPoints = (svg: string) => [...svg.matchAll(/points="([^"]+)"/g)]
+    .flatMap(match => match[1].trim().split(' ').map(pair => pair.split(',').map(Number) as [number, number]));
+  const extent = (points: readonly [number, number][], degrees: number) => {
+    const angle = degrees * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+    const xs = points.map(([x, y]) => x * cos - y * sin), ys = points.map(([x, y]) => x * sin + y * cos);
+    return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  };
+  const cases = (seed: number) => [
+    ...ITEM_KINDS.map(kind => [kind, generateItem(seed, 3, kind)] as const),
+    ...CHARM_SIZES.map(size => [`charm ${size.id}`, generateItem(seed, 3, 'charm', `jade-${size.id}`)] as const),
+  ];
+  const turned = new Set<string>();
+  let smallestCell = Infinity, largestCell = 0;
+  for (let seed = 0; seed < 300; seed++) for (const [label, item] of cases(seed)) {
+    const svg = itemPackIconSVG(item, 1, 1);
+    const degrees = Number(/rotate\((-?[\d.]+)\)/.exec(svg)![1]);
+    const scale = Number(/scale\((-?[\d.e+-]+)\)/.exec(svg)![1]);
+    assert.ok(Number.isFinite(scale) && scale > 0, `${label} seed ${seed} fits a real scale`);
+    const points = packPoints(svg), upright = extent(points, 0), drawn = extent(points, degrees);
+    // Both extents clear the 1-unit floor the fit clamps at, so the ratio below is the whole fit.
+    assert.ok(upright >= 11 && drawn > 1, `${label} seed ${seed} spans ${upright} upright and ${drawn} as drawn`);
+    assert.ok(upright / drawn >= 1 - TOLERANCE, `${label} seed ${seed} packs ${upright / drawn} of its upright size`);
+    smallestCell = Math.min(smallestCell, scale * drawn); largestCell = Math.max(largestCell, scale * drawn);
+    if (degrees !== 0) turned.add(label);
+  }
+  assert.ok(largestCell / smallestCell - 1 <= TOLERANCE, `every cell fits its drawn box into the same ${smallestCell} box`);
+  // The sweep is worthless unless it reaches the kinds that actually tilt.
+  for (const label of ['weapon', 'shield', 'charm', 'charm shard', 'charm tablet', 'charm spire', 'charm heart', 'charm monolith'])
+    assert.ok(turned.has(label), `the sweep exercises a tilted ${label}`);
 });

@@ -4,11 +4,11 @@ Local implementation · 2026-09-09. Charms are generated magical stones, using o
 
 ## Placement and bonuses
 
-The inventory has a 12×6 equipment bag and a separate **12×4 charm grid**. Picked-up charms go directly into that grid, never into the bag. If no footprint fits, the charm stays on the ground. Bag and charm capacity are independent. Dragging rearranges stones within their grid; footprints cannot cross the divider or wrap an edge. Auto-sort packs both regions independently.
+The inventory has an 8×3 equipment bag and a separate **8×3 charm grid**, one item per cell. Picked-up charms go directly into that grid, never into the bag. If no cell is free, the charm stays on the ground. Bag and charm capacity are independent. Dragging rearranges stones within their grid; a move cannot cross the divider. Auto-sort packs both regions independently.
 
 Only placed stones whose level requirement is met contribute modifiers. Higher-level stones can be collected and rearranged but remain inactive until that level. Overflow, stash and buyback stones grant no bonuses. Charms can be sold directly at vendors, including bulk sales, stored, or dragged onto the inventory drop icon to put them on the ground. Each removes their bonuses; dropped stones can be picked up again. Buying back or retrieving a stone requires space in the charm grid. Enchanting and enhancement use normal services. Pickup, storage, sale and level-up refresh the shared character projection; increased life/mana capacity never heals or refills the player.
 
-The same inventory records own both regions, with room for 120 one-cell objects. `inventoryLayout` uses cells 0–71 for equipment and 72–119 for charms. Old 64-/72-record saves remain readable and expand on normal inventory transactions; no reset or save version change. Shared save validation checks shape, ownership and affix budget. Higher-level owned charms remain valid saves.
+The same inventory records own both regions, with room for 120 one-cell objects. `inventoryLayout` uses cells 0–23 for equipment and 24–47 for charms; a stone's size class still sets its affix budget without occupying more space. Old 64-/72-record saves remain readable and expand on normal inventory transactions; nothing is reset. Save version 5 marks the one-time repack of pre-uniform anchors on load, without changing any saved field. Shared save validation checks shape, ownership and affix budget. Higher-level owned charms remain valid saves.
 
 ## Stone sizes
 
