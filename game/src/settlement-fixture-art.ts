@@ -1,4 +1,5 @@
 import { drawFortification } from './settlement-wall-art.ts';
+import { drawSupplyCart } from './cart-art.ts';
 import { architectureStyle } from './settlement-style.ts';
 import { vendorIdentity } from './vendor-identity.ts';
 import { drawVendorGlyph } from './vendor-identity-art.ts';
@@ -8,9 +9,18 @@ const poly=(c:CanvasRenderingContext2D,p:number[][],color:string)=>{c.beginPath(
 /** Uncached small fixtures share the exact collision footprint; floors never become houses. */
 export function drawSettlementFixture(c:CanvasRenderingContext2D,b:Building,time:number):void {
   if(b.wallSegment){drawFortification(c,b);return;}
+  if(b.kind==='cart'){drawSupplyCart(c,b);return;}
   c.save();c.translate(b.x,b.y);const w=b.width,h=b.height;
   c.fillStyle='#040b1090';c.beginPath();c.ellipse(w/2+6,h+2,w*.8,8,0,0,Math.PI*2);c.fill();
-  if(b.kind==='hearth'){
+  if(b.kind==='expedition'){
+    for(const x of[4,w-9]){c.fillStyle='#42382c';c.fillRect(x,-9,6,34);c.fillStyle='#ad8850';c.fillRect(x,8,6,3);}
+    poly(c,[[-5,-18],[w+4,-18],[w+7,6],[-7,6]],'#443a2c');poly(c,[[-5,-23],[w+4,-23],[w+7,-1],[-7,-1]],'#997448');
+    poly(c,[[3,-22],[w-7,-22],[w-3,-3],[0,-3]],'#d4c298');
+    c.strokeStyle='#7c775b';c.lineWidth=1;c.beginPath();c.moveTo(4,-9);c.bezierCurveTo(18,-27,28,2,45,-14);c.stroke();
+    for(let i=0;i<5;i++){c.fillStyle=i===4?'#8a4e47':'#475d59';c.beginPath();c.arc(7+i*8,-12+Math.sin(i*2)*5,2,0,7);c.fill();}
+    c.strokeStyle='#d4b66f';c.lineWidth=2;c.beginPath();c.arc(w-5,-20,7,0,7);c.stroke();c.beginPath();c.moveTo(w-12,-20);c.lineTo(w+2,-20);c.moveTo(w-5,-27);c.lineTo(w-5,-13);c.stroke();
+    c.fillStyle='#b09769';c.fillRect(-3,-25,4,26);c.fillRect(w-5,-25,4,26);
+  }else if(b.kind==='hearth'){
     for(let i=0;i<9;i++){const a=i*Math.PI*2/9;poly(c,[[w/2+Math.cos(a)*20-4,h/2+Math.sin(a)*13],[w/2+Math.cos(a)*20,h/2+Math.sin(a)*13-5],[w/2+Math.cos(a)*20+6,h/2+Math.sin(a)*13-2],[w/2+Math.cos(a)*20+3,h/2+Math.sin(a)*13+4]],i%2?'#758078':'#505f5b');}
     c.strokeStyle='#57412c';c.lineWidth=6;c.beginPath();c.moveTo(3,17);c.lineTo(29,5);c.moveTo(3,5);c.lineTo(29,18);c.stroke();
     for(let i=0;i<5;i++){const x=6+i*5;poly(c,[[x-5,15],[x-3,-4],[x+Math.sin(time*6+i)*4,-20-Math.sin(time*4+i)*8],[x+5,12]],i%2?'#ffca70':'#e67938');}
@@ -47,12 +57,6 @@ export function drawSettlementFixture(c:CanvasRenderingContext2D,b:Building,time
       c.strokeStyle='#c0af7a';c.lineWidth=1;c.beginPath();c.moveTo(xx+4,yy-14);c.lineTo(xx+11,yy-14);c.stroke();
     }
     c.fillStyle='#684c32';c.fillRect(1,10,w,10);c.strokeStyle='#baa075';c.strokeRect(1,10,w,10);
-  }else if(b.kind==='cart'){
-    c.fillStyle='#392f29';c.fillRect(2,-8,w-4,h-8);
-    for(let x=4;x<w-4;x+=6){c.fillStyle=x%3?'#887049':'#705b3d';c.fillRect(x,-8,5,h-8);}
-    for(const x of[-2,w-3]){c.fillStyle='#9c8050';c.fillRect(x,-17,4,h+26);c.fillStyle='#343d3b';c.beginPath();c.ellipse(x+2,h*.18,4,13,0,0,Math.PI*2);c.fill();c.strokeStyle='#a29971';c.stroke();}
-    c.fillStyle='#a68b5a';c.fillRect(0,-15,w,4);c.fillRect(0,h-16,w,4);
-    for(let i=0;i<3;i++)poly(c,[[6+i*7,10],[8+i*7,-4],[15+i*7,-6],[18+i*7,12]],'#92907a');
   }else if(b.kind==='bench'){
     for(const x of[3,w-5]){c.fillStyle='#51412f';c.fillRect(x,-4,3,15);}
     poly(c,[[0,-8],[w,-9],[w+2,-2],[-1,-1]],'#9d8052');c.strokeStyle='#c1a26a';c.beginPath();c.moveTo(2,-7);c.lineTo(w-2,-8);c.stroke();

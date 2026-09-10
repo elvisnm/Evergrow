@@ -11,6 +11,8 @@ export const WORKSPACES = [
 export type Workspace = typeof WORKSPACES[number]['id'];
 export interface Tool { id: string; group: Workspace; name: string; path: string; description: string; tags?: string; }
 export const TOOLS: readonly Tool[] = [
+  {id:'expeditions',group:'world',name:'Expedition routes',path:'/tools/expeditions.html',description:'Ten-stage route choices, dungeon modifiers, reward odds and level gate in the runtime panel.'},
+  {id:'respec',group:'equipment',name:'Enchanter respec',path:'/services.html?role=enchanter&respec',description:'Preview the affordable skill reset and exact refunded points.'},
   {id:'forge',group:'equipment',name:'Item forge',path:'/tools/forge.html',description:'Generate items by seed, kind, profile, rarity and material; equip previews and JSON export.',tags:'generator random roll affixes'},
   {id:'playground',group:'combat',name:'Skill playground',path:'/tools/skills.html',description:'Replay every active skill and specialization using actual combat and animation rules.',tags:'animations spells effects cast'},
   {id:'placements',group:'world',name:'Seed & placement inspector',path:'/tools/placements.html',description:'Survey generated events, towns and dungeon entrances by seed and coordinates.',tags:'generation map positions'},
@@ -41,7 +43,11 @@ export const TOOLS: readonly Tool[] = [
   {id:'encounters',group:'world',name:'Camps & landmarks',path:'/encounters.html',description:'Frozen wilderness placements, camps and encounter warnings.'},
   {id:'bosses',group:'world',name:'Wilderness bosses',path:'/bosses.html',description:'Three guarded lairs, committed attack warnings and automatic hoards.',tags:'boss elite arena'},
   {id:'events',group:'world',name:'Events',path:'/events.html',description:'Interactive landmark and reward presentation.'},
-  {id:'dungeon',group:'world',name:'Dungeons',path:'/dungeon.html?view=gallery',description:'Compare three dungeon themes, generate seeded layouts, inspect rooms and encounters, and export maps.'},
+  {id:'settlement-lighting',group:'world',name:'Settlement nights',path:'/layouts.html?lighting',description:'Warm settlement lanterns, windows and hearths through a live day cycle, with render timings.',tags:'town village city night windows performance'},
+  {id:'outdoor-lighting',group:'world',name:'Outdoor lighting',path:'/biomes.html?lighting',description:'Nine biome atmospheres, moving cloud shadows and a live day–night lighting study.',tags:'shader sunlight moonlight time day night cloud forest fog wet reflections'},
+  {id:'dungeon-lighting',group:'world',name:'Dungeon lighting',path:'/dungeon.html?view=lighting&seed=7319&room=4',description:'Live illuminated mist, damp stone reflections and selective fixture glow; export a rendered chamber.',tags:'shader atmosphere fog bloom'},
+  {id:'dungeon-entrances',group:'world',name:'Dungeon entrances',path:'/dungeon.html?view=entrances',description:'Six shared entrance silhouettes and material themes, with links to their floors.'},
+  {id:'dungeon',group:'world',name:'Dungeons',path:'/dungeon.html?view=gallery',description:'Compare six dungeon themes and entrances, generate larger expedition layouts, inspect rooms and encounters, and export maps.'},
   {id:'forest',group:'world',name:'Forest motion',path:'/forest.html',description:'Wind, foliage, wildlife and canopy light; recording support.'},
   {id:'water',group:'world',name:'Water motion',path:'/water.html',description:'Seeded river and lake surfaces, waves and reflections.'},
   {id:'portal',group:'world',name:'Portals',path:'/portal.html',description:'Town travel effects and portal artwork.'},

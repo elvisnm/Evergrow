@@ -29,6 +29,55 @@ On 2026-09-09 the display history was renumbered, preserving every date, note an
 
 ## Last verified publication
 
+- Game v0.3.7 / Sites version 38, publicly deployed on 2026-09-10 at 12:24:50 UTC.
+- Published source: `02564a52b6eec53daadcae9cf146b4f5855d721e`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_d0ddda91bbe48191bde922809a66216c`.
+- Deployment: `appgdep_6aa2a1842ce08191b4b5ae1e5c66045b`; Sites returned `succeeded`.
+- Unified frosted panel materials using the approved inventory treatment, background-driven tint, square edges and shared rarity-lit item tooltips.
+- Reduced-motion/transparency and forced-color fallbacks retained; embedded home panels reuse a single glass surface.
+- Existing characters and progress are unchanged; no save reset or database migration.
+- Passed three changelog tests, application/core type checking, cloud-enabled client/Worker build, archive validation and clean-source release validation.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.3.6 / Sites version 37, publicly deployed on 2026-09-10 at 11:57:42 UTC.
+- Published source: `9cb0458f289c11e9b2b62d523e84cc0d6f64bbd6`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_80060e300e988191a42d29f7e477e4fd`.
+- Deployment: `appgdep_6aa29b22f82c8191b893b1204813d8d5`; Sites returned `succeeded`.
+- Level-20 ten-stage expeditions, revealed route map, eight modifiers, grand-chest rewards, affordable enchanter skill respec and three additional dungeon themes with distinct entrances/bosses.
+- Dungeon-specific Journey guidance, accelerated crowd collision and roster queries, and offscreen enemy drawing culling.
+- Cloud roster/upload failure isolation, clearer recovery actions and Chronicle-backed replacement/deletion recovery.
+- Existing characters and progress are preserved; no save reset or database migration.
+- The 1,166-test regression run passed 1,165 tests; its remaining core-boundary check exposed two missing compiler-list entries. Both architecture tests passed after correction, followed by full type checking, cloud-enabled client/Worker build, archive validation and clean-source release validation.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.3.5 / Sites version 36, publicly deployed on 2026-09-10 at 06:13:19 UTC.
+- Published source: `7d969525dec524642f1bcc16e5469bcd37c156d8`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_43e24ace2bd881919fe2af15a207de7b`.
+- Deployment: `appgdep_6aa24a6ba91c8191bed8f4eeb15dfc2d`; Sites returned `succeeded`.
+- Dynamic day/night lighting and minimap clock, nine biome atmospheres, cloud shadows, directional scenery/water highlights, warmer settlement nights and dungeon reflections/glow.
+- Smoother Mire fog, cached fortification artwork and reusable flickering-light shadows.
+- Existing characters and progress are preserved; the clock follows saved simulation time. No save reset or database migration.
+- Passed all 1,137 code tests, type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.3.4 / Sites version 35, publicly deployed on 2026-09-09 at 19:15:47 UTC.
+- Published source: `08697db396647d0c51821e1fd1d0136458b39459`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_dd23519f8e948191a9bdb88b409fcc6e`.
+- Deployment: `appgdep_6aa1b0505eb48191a47cd3c76d2d48dc`; Sites returned `succeeded`.
+- Charms occupy 5% of item rewards across monsters, dungeon chests and item-giving events, including themed equipment rewards. Total item quantities, rarity and source levels remain unchanged.
+- Ground-loot corner tooltips, tooltip-only vendor inspection, hovered-item-first comparison placement, automatic skill rank/specialization activation, compact progression controls and redrawn supply carts.
+- Existing characters and progress are preserved; no save reset or database migration. Older 64-/72-slot saves pass charm reward, pickup and save round-trip checks.
+- Broad regression run passed 1,125 checks; its remaining item-corpus fixture was updated to the new reward entrypoint and passed with all 28 final item/charm/loot checks. Three changelog checks, type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation also passed.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
 - Game v0.3.3 / Sites version 34, publicly deployed on 2026-09-09 at 15:43:43 UTC.
 - Published source: `c29201cf41550758f8738c1bc50de920925ea2a6`.
 - Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_89174902b5348191831c9df8d9c43cd3`.

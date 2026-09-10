@@ -38,7 +38,7 @@ The atlas alone uses a 0.001 minimum zoom; gameplay retains 0.025. Shared terrai
 
 ### Dungeon workshop
 
-The World workspace’s Dungeon tool (`/dungeon.html?view=gallery&seed=7319`) compares Rootbound Crypt, Cinder Foundry and Drowned Vault maps using consecutive seeds. Seed input, New seed and PNG export support repeatable reviews. Click a room on Floor map or select a chamber in the sidebar to inspect actual runtime materials, props, fixtures and themed enemies. Chamber, Corridor and Encounter modes freeze disposable actors while lights animate at 30 Hz. The tool imports shared `generateDungeon`, `drawDungeonMap`, `DungeonWorld` and `Renderer`; it has no alternate generator or playable saves.
+The World workspace’s Dungeon tool (`/dungeon.html?view=gallery&seed=7319`) compares six dungeon themes using consecutive seeds. `view=entrances` shows their shared runtime entrance art; `expedition` selects the larger level-24 review floors. The Theme selector includes Rime Cathedral, Sunken Ossuary and Astral Archive. Seed input, New seed and PNG export support repeatable reviews. Click a room on Floor map or select a chamber in the sidebar to inspect actual runtime materials, props, fixtures and themed enemies. Chamber, Corridor and Encounter modes freeze disposable actors while lights animate at 30 Hz. The tool imports shared `generateDungeon`, `drawDungeonMap`, `DungeonWorld` and `Renderer`; it has no alternate generator or playable saves.
 
 ### Settlement workshop
 
@@ -51,3 +51,21 @@ The local `/character.html` review now includes the 8×3 uniform pack, item art,
 ### Charm review
 
 The Equipment workspace includes `/character.html?charms`, with six stone sizes staged in the dedicated charm grid. Item forge supports all 36 stone profiles, normal rarity, levels and enhancements. These views share runtime item rules and do not access character saves.
+
+### Dungeon lighting study
+
+The Dungeon workshop's Lighting view (`/dungeon.html?view=lighting&seed=7319&room=4`) presents illuminated mist, damp masonry reflections and selective fixture bloom through the production renderer. The World workspace links directly to it. Change the seed to 7317/7318 for Rootbound Crypt/Cinder Foundry. Export PNG captures the composed scene. Frozen actors and 30 Hz presentation keep this save-free; Chamber mode includes median CPU render/lighting timings (not a gameplay/GPU benchmark).
+
+### Outdoor lighting study
+
+`/biomes.html?lighting&view=verdant&variant=1` opens animated views of all nine climates using actual generated locations and the runtime renderer. Another area and seed selection inspect different landscape compositions; no scenery is added for screenshots. Actors stay frozen and the scene animates at 30 Hz, pausing while hidden and respecting reduced motion. Save PNG exports the current full-resolution composited frame. The regular biome gallery remains a still study. The optional Render timings disclosure reports bounded CPU timings, not GPU completion or gameplay frame rate.
+
+The outdoor lighting study now covers all nine climates. Use its time slider, Dawn/Noon/Dusk/Midnight presets, or accelerated **Play day cycle** to inspect the shared sky, moving cloud shade and changing shadow direction. Time controls affect only the disposable preview; the game derives its 36-minute day from saved simulation time.
+
+### Settlement night study
+
+World → Settlement nights opens `/layouts.html?lighting`. The existing settlement views share live time-of-day controls and a 30 Hz presentation loop, with reduced-motion/hidden-tab suspension. The simulation remains paused in disposable memory. Save PNG encodes only on demand, never on each animation frame. Render timings expose a bounded 600-frame CPU sample; setup, scenery, props, structures and characters help locate drawing costs. Nested timings overlap (world contains the other render stages; actors contains props/structures/characters), so do not sum them. GPU completion and playable simulation are not measured.
+
+### Expedition and respec studies
+
+The World workspace includes `/tools/expeditions.html`, a disposable instance of the runtime expedition panel. `stage=0..9`, `level=19` and `failed` expose progression, the level gate and failed-route states. Equipment includes `/services.html?role=enchanter&respec` for exact reset pricing and point refunds. These studies do not access playable saves.

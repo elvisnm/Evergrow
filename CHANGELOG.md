@@ -1,5 +1,83 @@
 # Evergrow changelog
 
+## v0.3.7 — 2026-09-10T12:22:00Z
+
+### Tweaks
+
+- Inventory, vendors, skills, journals and menu panels share frosted glass that picks up the scene behind them.
+- Item tooltips have richer rarity-colored light and a brief shimmer, with quieter equipped-item comparisons.
+- Square edges, crisp text and lighter window backdrops keep the interface consistent and the world visible.
+- Reduced-motion and reduced-transparency preferences retain clear, comfortable panels.
+
+> Existing characters and progress are unchanged.
+
+## v0.3.6 — 2026-09-10T11:53:00Z
+
+### New
+
+- Level 20 characters can start ten-dungeon expeditions at settlement map tables, choosing routes as they explore.
+- Larger expedition dungeons feature eight encounter modifiers and increasingly strong enemies, with treasure after each clear.
+- Finish all ten stages for a grand chest favoring epic and legendary equipment. Dying resets the route, while earned loot and character progress remain.
+- Rime Cathedral, Sunken Ossuary and Astral Archive join the wilderness and expeditions with distinct entrances, scenery and bosses.
+- Enchanters can reset your skill tree for 25 gold per refunded skill point.
+
+### Tweaks
+
+- The expedition map scrolls through your journey and reveals the next choices only after a clear; hover entrances for details.
+- Forks offer different dungeon themes and modifiers, with your current choice preserved across saves.
+- Journeys follows the boss, final chest and exit while inside any dungeon, then restores your outdoor objectives.
+
+### Fixes
+
+- Large dungeon fights run more smoothly, especially when enemies from several rooms pursue you together.
+- Expedition rewards and return visits preserve route progress without granting completion twice.
+- A problem with one cloud character no longer blocks other characters from loading or uploading.
+- Cloud save failures show clearer recovery actions, and the character hall opens without waiting for pending uploads.
+
+> Existing characters and progress are preserved. No save reset is required.
+
+## v0.3.5 — 2026-09-10T06:09:00Z
+
+### New
+
+- A dynamic day and night cycle changes outdoor lighting, water highlights and shadow direction; the minimap shows the current time.
+- All nine biomes have distinct moving atmosphere, from forest sunbeams and drifting clouds to snow, ash and desert haze.
+- Settlements glow after dusk with warm windows, stall lanterns, doorstep light and campfires.
+- Dungeon lights cast richer reflections and atmospheric glow while keeping stonework readable.
+
+### Tweaks
+
+- Forest leaves and rocks catch directional light that follows the time of day.
+- Mire fog moves in smoother banks, with clearer ground around your character and gentler wet highlights.
+
+### Fixes
+
+- Settlement walls reuse their artwork for smoother rendering while their shadows keep moving.
+- Flickering scenery lights no longer rebuild their shadows every frame.
+
+> Existing characters and progress are preserved. The world clock follows saved play time and pauses with the game.
+
+## v0.3.4 — 2026-09-09T19:13:00Z
+
+### New
+
+- Hover ground loot to inspect its full name and stats in the bottom-right corner.
+
+### Tweaks
+
+- Charms now make up 5% of item rewards from monsters, chests and events, including themed rewards.
+- Normal enemies average one charm per 71 kills, up from one per 182; existing characters use the same improved odds.
+- Shops, gambling and upgrade services use item tooltips instead of repeated detail panels.
+- Skill rank and specialization controls take less room in the tree sidebar.
+- Supply carts have plank-sided beds, spoked rear wheels, separate handles and visible cargo.
+
+### Fixes
+
+- Newly purchased skill ranks and specializations become active immediately; you can still switch back manually.
+- The hovered item's comparison card stays closest to its slot, with equipped gear beside it.
+
+> Existing characters, items and progress are preserved.
+
 ## v0.3.3 — 2026-09-09T15:41:00Z
 
 ### New
