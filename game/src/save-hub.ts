@@ -5,6 +5,7 @@ import { decodeSaveBundle } from './save-bundle.ts';
 import { WORLD_GENERATION_VERSION } from './world.ts';
 import { SaveClient } from './save-client.ts';
 import { CloudClient } from './cloud-client.ts';
+import { SharedSaveClient } from './shared-save-client.ts';
 import type { CharacterSave } from './character-save.ts';
 import type { CharacterRepositoryPort, SaveResult } from './character-storage.ts';
 import type { ChartResult, ExplorationPersistence } from './exploration.ts';
@@ -15,15 +16,24 @@ export interface SaveSourceUI { supported: boolean; mode: SaveMode; signedIn: bo
 export class SaveHub implements CharacterRepositoryPort, ExplorationPersistence {
   private local = new SaveClient();
   private cloud: CloudClient | null = null;
+  private shared: SharedSaveClient | null = null;
   private disposed = false;
   mode: SaveMode = 'local';
   supported = false;
   status = '';
   onChange = (_state: SaveSourceUI) => {};
   chart: (record: CharacterSave) => DecodedExploration | undefined = () => undefined;
-  get state(): SaveSourceUI { return { supported: this.supported, mode: this.mode, signedIn: !!this.cloud, status: this.mode === 'local' ? 'Local' : this.cloud?.status ?? this.status, message: this.mode === 'cloud' ? this.cloud?.message : undefined }; }
+  get state(): SaveSourceUI { return { supported: this.supported, mode: this.mode, signedIn: !!this.cloud, status: this.mode === 'local' ? (this.shared ? 'Shared with the dev server' : 'On this device') : this.cloud?.status ?? this.status, message: this.mode === 'cloud' ? this.cloud?.message : undefined }; }
+  /** Characters may live on the dev server; explored maps always stay in this browser. */
+  private get characters() { return this.mode === 'local' ? this.shared ?? this.local : this.repository; }
+  private get files() { return this.shared ?? this.local; }
   get repository() { if (this.mode === 'local') return this.local; if (!this.cloud) throw new Error('Sign in to use cloud saves.'); return this.cloud; }
   async initialize() {
+    if (import.meta.env.DEV) try {
+      // The dev server hosts one character store for every browser on the LAN; see scripts/shared-saves.ts.
+      const probe = await fetch('/__shared-saves', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      if (probe.ok && !this.disposed) { this.shared = new SharedSaveClient(this.local); this.onChange(this.state); }
+    } catch { /* No shared store; characters stay in this browser. */ }
     if (!import.meta.env.VITE_SITE_CLOUD || window.EvergrowAndroid) return;
     this.supported = true; this.mode = 'cloud';
     try {
@@ -47,7 +57,7 @@ export class SaveHub implements CharacterRepositoryPort, ExplorationPersistence 
   }
   async list() {
     if (this.mode === 'cloud' && !this.cloud) return [];
-    return this.repository.list();
+    return this.characters.list();
   }
   async leaderboard(order: LeaderboardOrder): Promise<LeaderboardSnapshot> {
     if (!this.supported) throw new Error('The leaderboard is available in the online game.');
@@ -57,25 +67,25 @@ export class SaveHub implements CharacterRepositoryPort, ExplorationPersistence 
     return response.json();
   }
   async chronicle(onCached?:(ledger:ChronicleLedger)=>void) {
-    const repository=this.repository;
+    const repository=this.characters;
     return repository instanceof CloudClient ? repository.chronicle(onCached) : repository.chronicle();
   }
-  async inspect(index: number) { return this.mode === 'cloud' && this.cloud ? this.cloud.inspect(index) : this.repository.read(index); }
-  async read(index: number) { return this.repository.read(index); }
-  async write(index: number, record: CharacterSave, expected: string | null) { return this.repository.write(index, record, expected); }
-  async remove(index: number, expected: string | null) { return this.repository.remove(index, expected); }
+  async inspect(index: number) { return this.mode === 'cloud' && this.cloud ? this.cloud.inspect(index) : this.characters.read(index); }
+  async read(index: number) { return this.characters.read(index); }
+  async write(index: number, record: CharacterSave, expected: string | null) { return this.characters.write(index, record, expected); }
+  async remove(index: number, expected: string | null) { return this.characters.remove(index, expected); }
   async readChart(key: string, seed: number, generation: string): Promise<ChartResult> { return this.repository.readChart(key, seed, generation); }
   async writeChart(key: string, seed: number, generation: string, data: DecodedExploration) { return this.repository.writeChart(key, seed, generation, data); }
   async removeChart(key: string, seed: number, generation: string) { if (this.mode === 'local') await this.local.removeChart(key, seed, generation); }
   async export(index: number) {
     if (this.mode !== 'local') throw new Error('File transfers are only available for local saves.');
-    return this.local.export(index);
+    return this.files.export(index);
   }
   async import(index: number, raw: string): Promise<SaveResult> {
     if (this.mode !== 'local') return { ok: false, message: 'File transfers are only available for local saves.' };
     const bundle = decodeSaveBundle(raw);
     if (!bundle || !canLoadWorld(bundle.character.worldVersion, WORLD_GENERATION_VERSION)) return { ok: false, message: 'Invalid or incompatible save file.' };
-    return this.local.import(index, raw);
+    return this.files.import(index, raw);
   }
   async useCloud(index: number, expected: string | null) { if (this.mode === 'cloud') await this.cloud?.useCloud(index, expected); }
   async flush() { if (this.mode === 'cloud') await this.cloud?.flush(); }

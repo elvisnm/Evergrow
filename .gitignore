@@ -17,3 +17,6 @@ android/local.properties
 
 android/app/src/main/assets/
 game/dist-android/
+
+# Dev-only shared character store served by scripts/shared-saves.ts.
+.evergrow-shared-saves.json

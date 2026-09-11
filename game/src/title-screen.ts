@@ -172,7 +172,7 @@ export class TitleScreen {
     this.element.querySelector<HTMLElement>('.title-sources')!.hidden = !source.supported;
     this.element.querySelectorAll<HTMLButtonElement>('[data-source]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.source === source.mode)));
     const status = this.element.querySelector<HTMLElement>('.title-storage-status')!;
-    status.textContent = source.mode === 'local' ? 'On this device' : source.status;
+    status.textContent = source.status;
     status.dataset.status = source.status;
     const recovery = this.element.querySelector<HTMLElement>('.title-cloud-recovery')!;
     recovery.hidden = source.mode !== 'cloud' || !['Offline', 'Cloud unavailable', 'Save needs attention', 'Storage unavailable', 'Reload required', 'Sign in again', 'Unavailable'].includes(source.status);
