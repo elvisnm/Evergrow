@@ -57,6 +57,7 @@ import { getZoneAt } from './zone-progression.ts';
 import { SaveHub, type SaveMode } from './save-hub.ts';
 import { SAVE_BUNDLE_LIMIT } from './save-bundle.ts';
 import { CharacterSession } from './character-session.ts';
+import { randomId } from './random-id.ts';
 import { TitleScreen } from './title-screen.ts';
 import { InventoryPanel } from './inventory-panel.ts';
 import { SkillTreePanel } from './skill-tree-panel.ts';
@@ -550,7 +551,7 @@ export class Game {
     const checkpoint = fresh.captureCheckpoint(); world.dispose();
     this.hallBusy = true;
     try {
-      if (!await this.session.create(index, name, seed, checkpoint, crypto.randomUUID(), Date.now())) {this.titleScreen.message(this.session.error);return false;}
+      if (!await this.session.create(index, name, seed, checkpoint, randomId(), Date.now())) {this.titleScreen.message(this.session.error);return false;}
     } finally {this.hallBusy=false;}
     await this.continueCharacter(index);
     return true;

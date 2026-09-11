@@ -1,3 +1,4 @@
+import { randomId } from './random-id.ts';
 import { canUpgradeWorld, upgradeWorldChart } from './world-save-upgrade.ts';
 import { parseChronicleLedger, recordChronicle, forkChronicle } from './chronicle.ts';
 import { decodeSaveBundle, makeSaveBundle, chartKey, bundleChart, encodeChart } from './save-bundle.ts';
@@ -51,7 +52,7 @@ async function execute(message: SaveRequest): Promise<unknown> {
   if (message.method === 'import') {
     const bundle = decodeSaveBundle(message.raw);
     if (!bundle) return { ok: false, message: 'Invalid or incompatible save file.' };
-    const id=crypto.randomUUID();
+    const id=randomId();
     const record = { ...bundle.character, id, checkpoint:{...bundle.character.checkpoint,chronicle:forkChronicle(bundle.character,id)}, updatedAt: Date.now() };
     return execute({ id: message.id, method: 'write', index: message.index, record, expected: message.expected, chart: bundle.chart, importing: true });
   }

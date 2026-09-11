@@ -1,3 +1,4 @@
+import { randomId } from './random-id.ts';
 import { CloudError, CloudStorageError, CloudSaveError, cloudFailureStatus, type CloudStatus } from './cloud-errors.ts';
 import type { LeaderboardOrder, LeaderboardSnapshot } from './leaderboard.ts';
 import type { ChronicleLedger } from './chronicle.ts';
@@ -176,7 +177,7 @@ export class CloudClient implements CharacterRepositoryPort, ExplorationPersiste
     try {
       let chart = this.chart(record);
       if (!chart) { const old = await this.cache<CloudRow | null>({ kind: 'read', index }); chart = old?.bundle?.character.id === record.id ? bundleChart(old.bundle) : undefined; }
-      const row = await this.rpc<{ token: string; conflict: boolean } | null>('write-bundle', { index, record, chart, expected, operation: crypto.randomUUID() });
+      const row = await this.rpc<{ token: string; conflict: boolean } | null>('write-bundle', { index, record, chart, expected, operation: randomId() });
       if (!row) return { ok: false, message: 'Character changed in another tab. Reopen it before saving.' };
       this.setStatus(row.conflict ? 'Conflict' : 'Saving…');
       // Durable local writes coalesce until the next 30-second upload window.
@@ -185,7 +186,7 @@ export class CloudClient implements CharacterRepositoryPort, ExplorationPersiste
   }
   private async commit(index: number, expected: string | null, bundle: SaveBundle | null): Promise<SaveResult> {
     try {
-      const row = await this.cache<CloudRow | null>({ kind: 'write', index, expected, bundle, operation: crypto.randomUUID() });
+      const row = await this.cache<CloudRow | null>({ kind: 'write', index, expected, bundle, operation: randomId() });
       if (!row) return { ok: false, message: 'Character changed in another tab. Reopen it before saving.' };
       this.setStatus(row.conflict ? 'Conflict' : 'Saving…');
       // Upload is asynchronous; the complete bundle is already durable before gameplay proceeds.
@@ -204,7 +205,7 @@ export class CloudClient implements CharacterRepositoryPort, ExplorationPersiste
       const remote = await this.api<{ revision: number }>(`characters/${index}`);
       const current = await this.cache<CloudRow | null>({ kind: 'inspect', index });
       if (current?.token !== expected || !current.conflict) return { ok: false, message: 'Recovery changed. Select it again before deleting.' };
-      const result = await this.api<{ revision: number }>(`characters/${index}`, { expected: remote.revision, operation: crypto.randomUUID(), bundle: null });
+      const result = await this.api<{ revision: number }>(`characters/${index}`, { expected: remote.revision, operation: randomId(), bundle: null });
       const resolved = await this.cache<CloudRow | null>({ kind: 'resolve', index, expected: row.token, bundle: null, base: result.revision });
       if (!resolved) return { ok: false, message: 'Cloud save deleted, but recovery changed in another tab. Select it again before deleting that copy.' };
       await this.flush();
