@@ -312,7 +312,8 @@ export class InventoryPanel {
     const {character:sheet,level}=this.player,candidates=charmComparisonCandidates(sheet,level),active=activeCharms(sheet,level);
     if(!candidates.some(i=>i.id===this.comparisonId))this.comparisonId=candidates[0]?.id??'';
     const root=this.element.querySelector<HTMLElement>('[data-charm-comparison]')!;
-    if(!candidates.length){root.innerHTML='<p class="ui-muted">Store a spare charm at a storage chest to compare it with your active stones.</p>';return;}
+    // Two ways to have nothing to compare: every stone you own is already active, or you own none.
+    if(!candidates.length){root.innerHTML=`<p class="ui-muted">${active.length?'Every charm you own is already active. Store one at a storage chest to compare it with the rest.':'Charms drop from enemies and chests. You have none yet; they grant their bonuses from the charm grid, with nothing to equip.'}</p>`;return;}
     const candidate=candidates.find(i=>i.id===this.comparisonId)!;
     const preview=previewCharmReplacement(sheet,level,this.comparisonId,[...this.comparisonRemoved]);
     root.innerHTML=`<label class="charm-candidate-label">Incoming stone<select class="ui-button" data-charm-candidate>${candidates.map(i=>`<option value="${escapeUI(i.id)}" ${i.id===this.comparisonId?'selected':''}>${escapeUI(itemDisplayName(i))} · Lv ${i.itemLevel}</option>`).join('')}</select></label>
