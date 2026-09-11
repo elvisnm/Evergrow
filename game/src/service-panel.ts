@@ -13,7 +13,7 @@ import { RESPEC_GOLD_PER_POINT, respecPoints, GAMBLE_KINDS, gambleOdds, premiumS
 import { improveItem, rerollPool, affixCategory, AFFIX_FOCUSES, type AffixFocus, type Improvement } from './item-improvement.ts';
 import { updateItemSlot } from './item-ui.ts';
 import { ItemTooltip } from './item-tooltip.ts';
-import { itemIconSVG, itemPackIconSVG } from './item-art.ts';
+import { itemIconSVG } from './item-art.ts';
 import { generateItem, EQUIPMENT_SLOTS, TIER_COLORS, TIER_NAMES, STAT_LABELS, itemAffixPool, itemDisplayName, formatStatValue } from './items.ts';
 import { goldBalance } from './wallet.ts';
 import { escapeUI, trapDialogFocus, uiIcon } from './ui-components.ts';
@@ -262,7 +262,6 @@ export class ServicePanel {
       cell.classList.add('character-bag-slot');
       cell.style.gridColumn = position === undefined ? '' : String(position % PACK_COLUMNS + 1);
       cell.style.gridRow = position === undefined ? '' : String(Math.floor((position >= PACK_CELLS ? position-PACK_CELLS : position) / PACK_COLUMNS) + 1);
-      cell.querySelector('svg')?.remove(); cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item,1,1));
       (position === undefined ? overflow : position>=PACK_CELLS ? root.querySelector<HTMLElement>('.character-charm-grid')! : bag).append(cell);
     });
     root.querySelector<HTMLElement>('.character-overflow')!.hidden = !overflow.childElementCount;
@@ -287,8 +286,6 @@ export class ServicePanel {
       cell.classList.add('character-bag-slot');
       cell.style.gridColumn = String(position % PACK_COLUMNS + 1);
       cell.style.gridRow = String(Math.floor(position / PACK_COLUMNS) + 1);
-      cell.querySelector('svg')?.remove();
-      cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item, 1, 1));
       grid.append(cell);
     });
   }

@@ -2,7 +2,7 @@ import { previewCharmReplacement, charmComparisonCandidates } from './charm-comp
 import { ITEM_LOCK_ICON } from './item-protection.ts';
 import type { DropItemSource } from './drop-item-command.ts';
 import { activeCharms, PACK_COLUMNS, PACK_ROWS, PACK_CELLS, INVENTORY_CELLS, CHARM_ROWS, resolvePackLayout, packOccupancy, footprintCells } from './inventory-grid.ts';
-import { itemPackIconSVG, itemIconSVG } from './item-art.ts';
+import { itemIconSVG } from './item-art.ts';
 import { itemDisplayName } from './items.ts';
 import { itemTooltipMarkup, updateItemSlot, CHANGE_LABELS, PREVIEW_PERCENT } from './item-ui.ts';
 import { ItemTooltip } from './item-tooltip.ts';
@@ -248,11 +248,6 @@ export class InventoryPanel {
         emptyMarkup: reserved ? `<span class="character-reserved-glyph" aria-hidden="true">${emptySlotIcon('weapon')}</span><span class="character-reserved-label">2H</span>` : location.type === 'equipment' ? emptySlotIcon(location.slot) : '<span class="ui-empty-item-mark">·</span>',
         label: reserved ? `Off-hand reserved by two-handed ${player.character.equipped.weapon!.name}` : item ? `${itemDisplayName(item)}, ${TIER_NAMES[item.tier]}, item level ${item.itemLevel}${location.type === 'equipment' ? `, equipped in ${SLOT_NAMES[location.slot]}` : ''}${item.requiredLevel > player.level ? `, requires level ${item.requiredLevel}` : ''}` : location.type === 'equipment' ? `${SLOT_NAMES[location.slot]}, empty` : `Empty inventory slot ${location.index + 1}`,
       });
-      if (item && location.type === 'bag' && cell.dataset.packSignature !== cell.dataset.signature) {
-        cell.querySelector('svg')?.remove();
-        cell.insertAdjacentHTML('afterbegin', itemPackIconSVG(item, 1, 1));
-        cell.dataset.packSignature = cell.dataset.signature;
-      }
     }
     const filtered = this.filters.size > 0 || this.rarities.size > 0;
     const matching = player.character.inventory.filter(item => matchesInventoryFilter(item, this.filters, this.rarities)).length;
