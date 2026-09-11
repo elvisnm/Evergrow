@@ -291,25 +291,40 @@ export function generateSettlement(seed: number, place: Place): Settlement {
   return {id,seed:place.seed,name:NAMES[place.seed%NAMES.length]+['ford','haven','watch','rest','wick','mere','bridge','fall','brook','cross','holm','stead','gate','wall','bury','crest'][Math.floor(place.seed/29)%16],kind,layout,x,y,radius,buildings,plaza,paths};
 }
 
+/** Comfortable corridor first, then a squeeze for tight plots. */
+const WALK_CLEARANCE=[25,16] as const;
+
 /** Bounded local routing, then visibility simplification; the result is immutable generation data. */
 function routeSettlementPath(buildings:Building[],start:[number,number],end:[number,number]):Array<[number,number]> {
   const step=24, limit=44, key=(x:number,y:number)=>`${x},${y}`;
-  const clear=(x:number,y:number)=>!buildings.some(b=>circleHitsRect(x,y,25,b));
+  // A tight plot can leave a door reachable only through a gap narrower than the comfortable
+  // corridor, so the walk is retried at a squeeze before giving up. Widest first keeps every
+  // settlement that already routed byte-identical.
+  let clearance:number=WALK_CLEARANCE[0];
+  const clear=(x:number,y:number)=>!buildings.some(b=>circleHitsRect(x,y,clearance,b));
   const visible=(a:number[],b:number[])=>{const n=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/8);for(let i=1;i<=n;i++)if(!clear(a[0]+(b[0]-a[0])*i/n,a[1]+(b[1]-a[1])*i/n))return false;return true;};
   if(visible(start,end))return [start,end];
-  const queue:Array<[number,number]>=[[0,0]], parents=new Map<string,[number,number]|null>([['0,0',null]]);
+  let parents=new Map<string,[number,number]|null>();
   let found:[number,number]|null=null;
-  for(let i=0;i<queue.length;i++) {
-    const q=queue[i], point:[number,number]=[start[0]+q[0]*step,start[1]+q[1]*step];
-    if(Math.hypot(point[0]-end[0],point[1]-end[1])<step*2&&visible(point,end)){found=q;break;}
-    for(const [dx,dy]of [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]){
-      const next:[number,number]=[q[0]+dx,q[1]+dy],k=key(...next);
-      if(Math.abs(next[0])>limit||Math.abs(next[1])>limit||parents.has(k))continue;
-      if(!visible(point,[start[0]+next[0]*step,start[1]+next[1]*step]))continue;
-      parents.set(k,q);queue.push(next);
+  for(const attempt of WALK_CLEARANCE) {
+    clearance=attempt;
+    const queue:Array<[number,number]>=[[0,0]];
+    parents=new Map<string,[number,number]|null>([['0,0',null]]);
+    for(let i=0;i<queue.length;i++) {
+      const q=queue[i], point:[number,number]=[start[0]+q[0]*step,start[1]+q[1]*step];
+      if(Math.hypot(point[0]-end[0],point[1]-end[1])<step*2&&visible(point,end)){found=q;break;}
+      for(const [dx,dy]of [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]){
+        const next:[number,number]=[q[0]+dx,q[1]+dy],k=key(...next);
+        if(Math.abs(next[0])>limit||Math.abs(next[1])>limit||parents.has(k))continue;
+        if(!visible(point,[start[0]+next[0]*step,start[1]+next[1]*step]))continue;
+        parents.set(k,q);queue.push(next);
+      }
     }
+    if(found)break;
   }
-  if(!found)throw new Error(`Settlement plot has no reachable entrance: ${JSON.stringify({start,end,obstacles:buildings.filter(b=>circleHitsRect(end[0],end[1],25,b)||circleHitsRect(start[0],start[1],25,b))})}`);
+  // Paths are decoration: they suppress props and give residents a line to stroll. An unroutable
+  // plot must degrade to the direct line, never abort generation of the cell the player stands in.
+  if(!found)return [start,end];
   const raw:Array<[number,number]>=[end];
   while(found){raw.push([start[0]+found[0]*step,start[1]+found[1]*step]);found=parents.get(key(...found))??null;}raw.reverse();
   const result=[raw[0]];

@@ -58,3 +58,17 @@ test('families remain inside houses; residents walk generated clear routes and h
   }
  }
 });
+
+test('a pinched plot routes at the squeeze instead of aborting the cell', () => {
+  // These two plots leave a door reachable only through a gap under the comfortable corridor.
+  // Routing used to throw there, which killed generation of the whole world cell the player was
+  // standing in -- a hard crash in service of decoration. Both now route at the squeeze width.
+  for (const [seed, id, placeSeed] of [[24, 6, 818430], [35, 46, 5094699]] as const) {
+    const town = generateSettlement(seed, { id, cx: 0, cy: 0, x: id * 1000, y: seed * 1000, seed: placeSeed, city: false });
+    assert.ok(town.paths.length > 0, `${town.id} routes its paths`);
+    for (const path of town.paths) {
+      assert.ok(path.points.length >= 2, `${town.id} routes a real path`);
+      for (const [x, y] of path.points) assert.ok(Number.isFinite(x) && Number.isFinite(y), `${town.id} routes finite points`);
+    }
+  }
+});
