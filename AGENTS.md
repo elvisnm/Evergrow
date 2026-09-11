@@ -185,3 +185,12 @@ Read `docs/wilderness-bosses.md` before changing lair placement, boss AI or hoar
 The user approved player-facing v0.2.0 for the settlement/gambler milestone. Subsequent routine publications increment the patch (0.2.1, 0.2.2, etc.). Stay below 0.5.0 until explicitly approved. Follow docs/releases.md; do not renumber technical save/world/dungeon/Sites identifiers.
 
 Charms use the same item recipes and inventory records, with active cells 72–119 below the 12×6 bag. Charms are collected directly into their own grid and never enter the equipment bag. Only level-eligible stones grant modifiers; sorting packs both grids independently and vendors can sell charms directly. `charm-content.ts` owns six sizes, six flavors and utility weights. Gold/XP bonuses apply once at reward creation/commit, not on currency pickup or vendor payment. Read `docs/charms.md` before extending charms.
+
+## Bulk selling from every merchant tab (2026-09-11)
+
+Selling is offered wherever the bag is shown: bag clicks toggle a multi-item selection, the rarity chips and active-charm
+consent render there, and the footer commits the `sellMany`. A dedicated `Sell all` button was tried and removed — the five
+rarity chips already select everything between them, so it was a second control for the same outcome. A selection keeps its
+receipt on the tab that made it; nothing reroutes the player to the Sell tab. `service-panel.ts`'s `sellable` getter holds the
+two exceptions: the improve tabs, where a bag click already means "work on this item", and the chest keeper, which trades
+nothing. Selection is built from `bulkSaleItems`, keeping one eligibility rule between the selector and the quote.
