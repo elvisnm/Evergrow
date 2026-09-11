@@ -84,12 +84,25 @@ export class ServicePanel {
       ? { type: 'improve', source: this.selected.source, operation: this.operation, affix: 0 } : { type: 'sell', source: this.selected.source };
     else this.selected = null;
   }
+  /** Select every sellable item, or one rarity of them. Locked items and — without explicit
+   * consent — active charms are not sellable, so selecting them would only fail the quote. */
+  private setSales(tier?: ItemTier): void {
+    this.sales.clear();
+    for(const item of bulkSaleItems(this.player.character,this.player.level,this.includeActiveCharms)) {
+      if(tier && item.tier !== tier) continue;
+      const bag = this.player.character.inventory.indexOf(item);
+      this.sales.set(item.id,{bag,id:item.id,revision:item.recipe.revision});
+    }
+    this.selected = null;
+  }
+  /** Review-tool entry point: open the dedicated Sell tab on a ready-made selection. */
   selectSales(tier?: ItemTier): void {
     if(this.npc.role === 'stash' || this.saving) return;
-    this.tab = 'sell'; this.sales.clear();
-    this.player.character.inventory.forEach((item,bag) => { if(item && (!tier || item.tier === tier)) this.sales.set(item.id,{bag,id:item.id,revision:item.recipe.revision}); });
-    this.selected = null; this.render();
+    this.tab = 'sell'; this.setSales(tier); this.render();
   }
+  /** Selling is offered wherever the bag is shown, except where a bag click already means
+   * something else: the improve tabs pick one item to work on, and the chest keeper trades nothing. */
+  private get sellable(): boolean { return this.npc.role !== 'stash' && this.tab !== 'improve'; }
   private render(): void {
     this.element.classList.toggle('is-storage',this.npc.role==='stash');
     if(this.tab==='respec'){this.renderRespec();return;}
@@ -98,6 +111,7 @@ export class ServicePanel {
     this.goldFeedback.stop();
     this.tooltip.hide();
     this.element.classList.toggle('is-selling', this.tab === 'sell');
+    this.syncMultiSelect();
     const bagScroll=this.element.querySelector('.service-bag')?.scrollTop??0;
     const focused = this.element.querySelector<HTMLElement>(':focus');
     const active = focused?.dataset.item;
@@ -107,7 +121,7 @@ export class ServicePanel {
     this.element.innerHTML = `${this.headerMarkup()}
       ${this.tabsMarkup()}
       <div class="service-body"><section class="service-offer ui-scroll-area">${this.tab === 'sell' ? '<div class="service-section-heading"><h3>Selected items</h3><button class="ui-button ui-button--quiet" data-clear-sales>Clear</button></div>' : this.tab === 'improve' ? `<div class="service-forge">${npcEmblem(this.npc.role)}</div>${this.npc.role === 'enchanter' ? `<select class="ui-button" data-operation aria-label="Enchantment">${(['rarity', 'rerollOne', 'rerollAll', 'relevel'] as Improvement[]).map(op => `<option value="${op}" ${op === this.operation ? 'selected' : ''}>${OP_LABELS[op]}</option>`).join('')}</select>` : '<h3>Enhance equipment</h3>'}` : `<div class="service-section-heading"><h3>${this.tab === 'shop' ? `Stock · Lv ${vendorStockLevel(this.npc, this.player.level)}` : 'Buyback'}</h3><span>${this.tab === 'shop' ? `Restocks at level ${(stockEpoch(this.player.level) + 1) * 3 + 1}` : 'Last 12 sales'}</span></div><div class="service-stock ui-item-grid"></div>`}<div class="service-detail"></div></section>
-      <section class="service-bag ui-scroll-area">${this.tab === 'improve' || (this.npc.role === 'blacksmith' && this.tab === 'shop') ? '<section class="service-equipped-section" aria-label="Equipped gear"><div class="service-section-heading"><h3>Equipped</h3><span>Upgrade in place</span></div><div class="service-equipment ui-item-grid"></div></section>' : ''}<section aria-label="Inventory"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}${this.tab === 'sell' ? this.rarityControls() : ''}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></section></div>
+      <section class="service-bag ui-scroll-area">${this.tab === 'improve' || (this.npc.role === 'blacksmith' && this.tab === 'shop') ? '<section class="service-equipped-section" aria-label="Equipped gear"><div class="service-section-heading"><h3>Equipped</h3><span>Upgrade in place</span></div><div class="service-equipment ui-item-grid"></div></section>' : ''}<section aria-label="Inventory"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}${this.sellable ? this.rarityControls() : ''}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></section></div>
       <footer class="ui-window-footer"><span class="service-message" role="status"></span><button class="ui-button ui-button--primary" data-confirm disabled>Choose an item</button></footer>`;
     this.renderInventoryPack();
     const equipment = this.element.querySelector('.service-equipment');
@@ -211,7 +225,7 @@ export class ServicePanel {
     this.element.innerHTML=`${this.headerMarkup()}${this.tabsMarkup()}
       <div class="service-body"><section class="service-offer ui-scroll-area"><div class="service-section-heading"><h3>Choose an item type</h3><span>${this.npc.settlementTier??'settlement'} · Lv ${vendorLevel(this.npc,this.player.level)}</span></div>
       <div class="gamble-choices">${GAMBLE_KINDS.map((kind,i)=>`<button class="gamble-choice" data-gamble="${kind}" aria-pressed="${this.selected?.type==='gamble'&&this.selected.kind===kind}"><span>${itemIconSVG(generateItem(i+71,1,kind,undefined,'common'),44)}</span><b>${kind==='head'?'Helmet':kind[0].toUpperCase()+kind.slice(1)}</b><small>${gamblePrice(this.npc,this.player.level,kind).toLocaleString()} gold</small></button>`).join('')}</div><details class="gamble-odds"><summary>Rarity odds</summary><p>${gambleOdds(this.npc).map((w,i)=>`${['Common','Magic','Rare','Epic','Legendary'][i]} ${w}%`).join(' · ')}</p></details>
-      <div class="service-detail"></div></section><section class="service-bag ui-scroll-area"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></div>
+      <div class="service-detail"></div></section><section class="service-bag ui-scroll-area"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}${this.sellable ? this.rarityControls() : ''}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></div>
       <footer class="ui-window-footer"><span class="service-message" role="status"></span><button class="ui-button ui-button--primary" data-confirm disabled>Choose an item type</button></footer>`;
     this.renderInventoryPack(); this.renderDetail();
     if(control)this.element.querySelector<HTMLElement>(control)?.focus({preventScroll:true});
@@ -358,9 +372,12 @@ export class ServicePanel {
     if (button.dataset.item) {
       if(this.npc.role==='stash'&&!hasStorageTab(this.player.character,this.storageTab))return;
       const value = this.resolve(button.dataset.item); if (!value) return;
-      if(this.npc.role==='gambler'&&this.tab==='shop')return;
-      if(this.tab === 'sell' && value.item.locked){this.element.querySelector('.service-message')!.textContent='Unlock this item in your inventory before selling it.';return;}
-      if(this.tab === 'sell' && value.source && 'bag' in value.source) {
+      const bagCell = !!value.source && 'bag' in value.source;
+      if(this.npc.role==='gambler'&&this.tab==='shop'&&!bagCell)return;
+      if(this.sellable && bagCell && value.item.locked){this.element.querySelector('.service-message')!.textContent='Unlock this item in your inventory before selling it.';return;}
+      // Shift-click still sells one item outright, but never past a selection it would ignore.
+      if(this.sellable && bagCell && e.shiftKey && this.tab !== 'sell' && this.sales.size === 0) { this.selected = value.request; this.renderDetail(); this.confirm(); return; }
+      if(this.sellable && bagCell && value.source && 'bag' in value.source) {
         if(this.sales.has(value.item.id)) this.sales.delete(value.item.id);
         else this.sales.set(value.item.id,{bag:value.source.bag,id:value.item.id,revision:value.item.recipe.revision});
         this.renderDetail(); this.syncRarities();
@@ -377,13 +394,14 @@ export class ServicePanel {
   private renderDetail(): void {
     if(this.tab==='respec'){this.renderRespec();return;}
     if(this.npc.role==='stash'){this.storageDetail();return;}
-    if(this.npc.role==='gambler'&&this.tab==='shop'){this.specialDetail();return;}
+    if(this.npc.role==='gambler'&&this.tab==='shop'&&this.sales.size===0){this.specialDetail();return;}
     this.quote = null; const selected = this.selected;
     const detail = this.element.querySelector<HTMLElement>('.service-detail')!, button = this.element.querySelector<HTMLButtonElement>('[data-confirm]')!;
     const message = this.element.querySelector<HTMLElement>('.service-message')!; message.textContent = '';
-    detail.replaceChildren(); detail.hidden=this.tab!=='sell'&&this.tab!=='improve';
+    const selling = this.tab === 'sell' || (this.sellable && this.sales.size > 0);
+    detail.replaceChildren(); detail.hidden=!selling&&this.tab!=='improve';
     button.disabled = true; button.textContent = 'Choose an item';
-    if (this.tab === 'sell') { this.renderSales(detail, button, message); return; }
+    if (selling) { this.renderSales(detail, button, message); return; }
     if (selected?.type === 'sellMany') return;
     if (!selected) { detail.hidden=true; if(this.tab==='improve')message.textContent='Choose equipment to improve.'; return; }
     for (const cell of this.element.querySelectorAll<HTMLElement>('[data-item]')) {
@@ -426,8 +444,12 @@ export class ServicePanel {
       button.setAttribute('aria-pressed',String(items.length>0&&items.every(item=>this.sales.has(item!.id))));
     }
   }
+  /** The per-cell check earns its place once a selection is plural; one selected item is
+   * already obvious from its outline, and the badge only hides the art underneath. */
+  private syncMultiSelect(): void { this.element.classList.toggle('is-multi-select', this.sales.size >= 2); }
   private renderSales(detail:HTMLElement, button:HTMLButtonElement, message:HTMLElement): void {
     const items=[...this.sales.values()].sort((a,b)=>a.bag-b.bag);
+    this.syncMultiSelect();
     for(const cell of this.element.querySelectorAll<HTMLButtonElement>('[data-item]')) {
       const entry=this.resolve(cell.dataset.item!);const selected=!!entry&&this.sales.has(entry.item.id);
       cell.classList.toggle('is-selected',selected);cell.setAttribute('aria-pressed',String(selected));

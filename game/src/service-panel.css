@@ -56,7 +56,7 @@
 .service-rarities button:hover:not(:disabled){background:#253138}.service-rarities button:disabled{opacity:.35;cursor:default}
 .service-rarities button:focus-visible,.service-sale-row:focus-visible{outline:2px solid #c8b982;outline-offset:2px}
 .service-panel.is-selling .service-grid .is-selected{outline:1px solid #e8cd86;outline-offset:1px;box-shadow:0 0 14px #d5b76028}
-.service-panel.is-selling .service-grid .is-selected::after{content:'✓';position:absolute;top:3px;right:3px;display:grid;place-items:center;width:17px;height:17px;border-radius:0;background:#e4cc89;color:#15201d;font:12px system-ui;box-shadow:0 1px 5px #0009}
+.service-panel.is-multi-select .service-grid .is-selected::after{content:'✓';position:absolute;top:3px;right:3px;display:grid;place-items:center;width:17px;height:17px;border-radius:0;background:#e4cc89;color:#15201d;font:12px system-ui;box-shadow:0 1px 5px #0009}
 .service-sale-total{display:flex;flex-direction:column;gap:6px;padding:18px;margin-bottom:16px;border:1px solid #bdae7428;border-radius:0;background:radial-gradient(ellipse at top left,#d8b96218,transparent 80%),#0c171e}
 .service-sale-total>span{color:#99acae;font-size:13px}.service-sale-total strong{color:#e9d39b;font-size:29px;font-weight:500}.service-sale-total strong small{font-size:13px;color:#a39a7d}
 .service-sale-list{display:flex;flex-direction:column;gap:3px}

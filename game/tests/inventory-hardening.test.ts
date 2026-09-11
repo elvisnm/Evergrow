@@ -136,3 +136,19 @@ test('a pre-uniform v4 pack repacks on load instead of reading as corrupt',async
   assert.deepEqual(stones.map(i=>layout[i.id]),[PACK_CELLS,PACK_CELLS+1,PACK_CELLS+2]);
   assert.equal(activeCharms(loaded).length,stones.length);
 });
+
+test('selecting every sellable item quotes cleanly past locked items and active charms',()=>{
+  // Guards the Sell all shortcut: it selects exactly bulkSaleItems, so the selection it
+  // hands the receipt can never be the one the quote rejects as locked or unconsented.
+  const sim=new Simulation(world,{spawn:false}),s=sim.player.character;
+  const stone=generateItem(91,1,'charm','jade-pebble','common'),ring=generateItem(92,1,'ring'),helm=generateItem(93,1,'head');
+  addInventoryItem(s,stone);addInventoryItem(s,ring);addInventoryItem(s,helm);
+  assert.ok(setItemLock(s,ring.id,true).ok);
+  const selection=(items:readonly {id:string;recipe:{revision:number}}[])=>items.map(item=>({bag:s.inventory.findIndex(owned=>owned?.id===item.id),id:item.id,revision:item.recipe.revision}));
+  const eligible=bulkSaleItems(s,1);
+  assert.deepEqual(eligible.map(i=>i.id),[helm.id]);
+  assert.equal(quoteService(s,smith,1,{type:'sellMany',items:selection(eligible)}).ok,true);
+  const consented=bulkSaleItems(s,1,true);
+  assert.deepEqual(consented.map(i=>i.id),[stone.id,helm.id]);
+  assert.equal(quoteService(s,smith,1,{type:'sellMany',items:selection(consented),includeActiveCharms:true}).ok,true);
+});
