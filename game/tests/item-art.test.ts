@@ -5,6 +5,8 @@ import { itemIconSVG, itemDropShapes, itemPackIconSVG, outfitFromEquipment } fro
 import { WEAPON_PROFILES, SHIELD_PROFILES } from '../src/weapon-content.ts';
 import { CHARM_SIZES } from '../src/charm-content.ts';
 import { armorShapes } from '../src/armor-shapes.ts';
+import { focusShapes } from '../src/focus-shapes.ts';
+import { shieldShapes, weaponShapes } from '../src/weapon-shapes.ts';
 
 test('every equipment family generates distinct vector art without external resources', () => {
   const icons = ITEM_KINDS.map(kind => itemIconSVG(generateItem(419, 1, kind)));
@@ -145,4 +147,26 @@ test('no kind ever packs smaller than it would upright', () => {
   // The sweep is worthless unless it reaches the kinds that actually tilt.
   for (const label of ['weapon', 'shield', 'charm', 'charm shard', 'charm tablet', 'charm spire', 'charm heart', 'charm monolith'])
     assert.ok(turned.has(label), `the sweep exercises a tilted ${label}`);
+});
+
+test('fitted icon kinds fill a comparable share of the icon box at every seed', () => {
+  // Guards the regression where per-kind down-weights tuned for tall multi-cell pack
+  // footprints left a dagger or an orb reading ~60% of the box beside 75-84% armour.
+  const extent = (shapes: readonly { points: readonly (readonly [number, number])[] }[], degrees: number) => {
+    const angle = degrees * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+    const points = shapes.flatMap(shape => shape.points.map(([x, y]) => [x * cos - y * sin, x * sin + y * cos]));
+    const xs = points.map(p => p[0]!), ys = points.map(p => p[1]!);
+    return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  };
+  for (const seed of [3, 101, 419, 5150, 31337]) {
+    for (const kind of ['weapon', 'shield', 'grimoire', 'orb'] as const) {
+      const item = generateItem(seed, 5, kind);
+      const scale = Number(/scale\(([-\d.e]+)\)/.exec(itemIconSVG(item))![1]);
+      const degrees = kind === 'weapon' ? (item.weapon!.visual.kind === 'bow' ? -18 : -52) : 0;
+      const shapes = kind === 'weapon' ? weaponShapes(item.weapon!.visual)
+        : kind === 'shield' ? shieldShapes(item.shield!.visual) : focusShapes(item.focus!.visual);
+      const fill = scale * extent(shapes, degrees) / 48;
+      assert.ok(fill > .74 && fill < .86, `${kind} seed ${seed} fills ${(fill * 100).toFixed(0)}% of the icon box`);
+    }
+  }
 });

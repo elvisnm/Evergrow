@@ -22,6 +22,11 @@ const PACK_ICON_UNIT = 64, PACK_ICON_INSET = .12, PACK_ICON_SQUARE = .8;
 
 const dropShapes = new WeakMap<Item, readonly GearShape[]>();
 
+/** Uniform 1x1 slots put a dagger beside a cuirass, so every measured silhouette fills the
+ * same share of the icon box. The per-kind down-weights this replaces were tuned for the
+ * tall multi-cell pack footprints that preceded uniform slots. */
+const ICON_FIT_BOX = 40, ICON_FIT_OCCUPANCY = .95;
+
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 
 /** Shared rotate-and-measure: the extent a group draws under an SVG rotate() of the same angle. */
@@ -98,19 +103,18 @@ export function itemIconSVG(item: Item, size = 48): string {
       const shapes = weaponShapes(visual);
       if (shapes.length === 0) { shape = ''; break; }
       const degrees = visual.kind === 'bow' ? -18 : -WEAPON_ICON_TILT;
-      const { minX, maxX, minY, maxY } = rotatedBounds(shapes, degrees);
-      const occupancy = visual.kind === 'wand' ? .72 : visual.kind === 'dagger' ? .78 : visual.kind === 'mace' && visual.length < 26 ? .9 : 1;
-      const scale = occupancy * Math.min(37 / Math.max(1, maxX - minX), 40 / Math.max(1, maxY - minY));
-      shape = `<g transform="translate(24 24) scale(${scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2}) rotate(${degrees})">${detailed(shapes)}</g>`;
+      shape = `<g transform="${iconFitTransform(shapes, degrees)}">${detailed(shapes)}</g>`;
       break;
     }
     case 'grimoire': case 'orb': {
-      shape = `<g transform="translate(24 ${item.kind === 'orb' ? 39 : 33}) scale(${item.kind === 'orb' ? 2.3 : 2.15})">${detailed(focusShapes(item.focus!.visual))}</g>`;
+      const shapes = focusShapes(item.focus!.visual);
+      shape = `<g transform="${iconFitTransform(shapes, 0)}">${detailed(shapes)}</g>`;
       break;
     }
     case 'shield': {
       const visual = item.shield?.visual ?? { kind: 'kite', base, edge, trim, shadow };
-      shape = `<g transform="translate(24 23) scale(1.45)">${detailed(shieldShapes(visual))}</g>`;
+      const shapes = shieldShapes(visual);
+      shape = `<g transform="${iconFitTransform(shapes, 0)}">${detailed(shapes)}</g>`;
       break;
     }
     case 'head':
@@ -135,6 +139,13 @@ export function itemIconSVG(item: Item, size = 48): string {
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${pixels}" height="${pixels}" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><title>${escape(item.name)}</title>
     <ellipse cx="24" cy="42" rx="15" ry="3" fill="#05090e" opacity=".45"/>${shape}</svg>`;
+}
+
+/** Centre a measured group in the icon box at the shared occupancy. */
+function iconFitTransform(shapes: readonly GearShape[], degrees: number): string {
+  const { minX, maxX, minY, maxY } = rotatedBounds(shapes, degrees);
+  const scale = ICON_FIT_OCCUPANCY * Math.min(ICON_FIT_BOX / Math.max(1, maxX - minX), ICON_FIT_BOX / Math.max(1, maxY - minY));
+  return `translate(24 24) scale(${scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2}) rotate(${degrees})`;
 }
 
 /** Reposition a shape group into one measurable point space, mirroring an SVG
