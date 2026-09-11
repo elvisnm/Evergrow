@@ -24,9 +24,9 @@ test('assigned attributes drive actual combat resources, damage and cadence', ()
     for (let count = 0; count < 5; count++) allocateAttribute(sheet, attribute);
   }
   const stats = deriveCharacterStats(sheet);
-  assert.equal(stats.attackDamageMultiplier, 1.1); assert.equal(stats.attackSpeedMultiplier, 1.0125);
-  assert.equal(stats.critChance, .00375); assert.equal(stats.maxMana, 120);
-  assert.equal(stats.spellDamageMultiplier, 1.15); assert.equal(stats.maxHp, 130);
+  assert.equal(stats.attackDamageMultiplier, 1.075); assert.equal(stats.attackSpeedMultiplier, 1.0125);
+  assert.equal(stats.critChance, .00375); assert.equal(stats.maxMana, 110);
+  assert.equal(stats.spellDamageMultiplier, 1.075); assert.equal(stats.maxHp, 130);
   assert.equal(sheet.statPoints, 0);
 });
 
@@ -67,7 +67,7 @@ test('the same bonuses derive identically from equipment or tree nodes', () => {
   assert.deepEqual(gearStats, treeStats);
   assert.ok(gearStats.damageReduction > 0); assert.equal(gearStats.lifeOnHit, 2);
   assert.equal(gearStats.cooldownMultiplier, .9);
-  assert.equal(gearStats.lifeRegeneration, 1); assert.equal(gearStats.manaRegeneration, 3);
+  assert.equal(gearStats.lifeRegeneration, 1); assert.equal(gearStats.manaRegeneration, 1.4);
 });
 
 test('attribute and direct bonuses accumulate once across multiple items and the tree', () => {
@@ -77,7 +77,7 @@ test('attribute and direct bonuses accumulate once across multiple items and the
   sheet.equipped.chest!.implicit = { vitality: 2, armor: 120 };
   const stats = deriveCharacterStats(sheet, { strength: 3, damagePercent: 4, vitality: 1 });
   assert.equal(stats.attributes.strength, 18); assert.equal(stats.attributes.vitality, 13);
-  assert.equal(stats.attackDamageMultiplier, 1.3); assert.equal(stats.maxHp, 128);
+  assert.equal(stats.attackDamageMultiplier, 1.26); assert.equal(stats.maxHp, 128);
   assert.equal(stats.damageReduction, .5);
   assert.equal(sheet.attributes.strength, 10); assert.equal(sheet.attributes.vitality, 10);
 });
@@ -118,7 +118,7 @@ test('gear and tree combine independent cast speed and mana efficiency with boun
   const stats = deriveCharacterStats(sheet, { castSpeedPercent: 20, manaCostPercent: 10 });
   assert.equal(stats.castSpeedMultiplier, 1.3);
   assert.equal(stats.attackSpeedMultiplier, 1);
-  assert.equal(stats.manaCostMultiplier, .75);
+  assert.ok(Math.abs(stats.manaCostMultiplier - .7557601566)<1e-9);
   const capped = deriveCharacterStats(sheet, { castSpeedPercent: 1e9, manaCostPercent: 1e9 });
-  assert.equal(capped.castSpeedMultiplier, 6); assert.equal(capped.manaCostMultiplier, .25);
+  assert.equal(capped.castSpeedMultiplier, 6); assert.equal(capped.manaCostMultiplier, .6);
 });

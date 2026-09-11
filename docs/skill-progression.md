@@ -156,3 +156,14 @@ Projectile fans require all their projectile slots before paying mana or consumi
 Executioner's rear strike now deals 3× the equivalent Original frontal potency; only non-rear hits receive its 15% penalty. Shattered Sky has five impacts at 65% Original radius, and its falling stones scale with that radius. Iron Aegis gains duration after capping reduction, including effective ranks from equipment. These are deliberate corrections to the published tradeoffs and rank plateau; no save-format change or progress reset is introduced.
 
 See [weapons and skills](weapons-and-skills.md#skill-contact-and-feedback--2026-09-07) for the contact/GFX pass and [the audit](skill-audit-2026-09-07.md#implementation-follow-up--2026-09-07) for its resolution matrix. Combat feel, sound balance and visual composition still need player acceptance.
+
+
+## Loot and focused-damage tuning · local September 11 follow-up
+
+Purchased ranks keep their 15%-per-rank damage progression and original mana/cooldown costs. Equipment ranks contribute 12 percentage points each for the first three, then 5 each for further ranks, inside the same rank multiplier. At purchased rank 5, +3 gear ranks grant 22.5% more damage and +10 grant 44.375% (formerly 28.125% and 93.75%). The ten-rank cap, drop quantiles, effective-rank display and Bulwark utility progression remain unchanged.
+
+Every projectile and scattered impact deals its full resolved damage, including multiple hits from one cast against the same enemy. The experimental same-target repeat reductions have been removed. Each individual projectile still hits a target at most once; normal status refresh rules remain unchanged.
+
+Shattered Sky's four outer centers lie 1.6 impact radii from the aim point, giving its five smaller impacts wider coverage. Blocked/occluded centers retain the existing fallback to the aim point; all connecting impacts deal full damage. Other barrage positions remain unchanged.
+
+Fire attacks with an explicit burn recipe suppress the generic contact burn. Fireball now applies its authored 12%-of-hit-per-second rate for three seconds rather than merging the generic 15% rate with its longer duration. Basic fire bolts and elemental melee keep their generic burn; periodic damage still cannot crit or recursively apply contact burns. Ground fire keeps its separate authored rate, with normal strongest-rate/longest-duration status merging across distinct applications.

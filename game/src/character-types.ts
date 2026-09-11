@@ -16,6 +16,9 @@ export type ItemTier = 'common' | 'magic' | 'rare' | 'epic' | 'legendary';
 export interface ItemAffix { name: string; stat: StatKey; value: number; }
 export interface ItemRecipe {
   charmVersion?: 1;
+  manaVersion?: 1;
+  offenseVersion?: 1;
+  rollVersion?: 1;
   materialId?: ItemMaterialId;
   profileId?: string; starter: boolean; enhancement: number; revision: number;
   targetedRolls: number; fullRolls: number; rolls: number[];
@@ -41,6 +44,8 @@ export interface CharacterSheet extends GoldWallet {
   commerce: CommerceState;
   attributes: Record<Attribute, number>;
   statPoints: number; skillPoints: number;
+  /** One complimentary attribute refund for the offensive balance revision. */
+  attributeResetUsed?: true;
   allocatedNodes: string[];
   inventory: Array<Item | null>;
   /** Item IDs map to top-left cells in the carried pack. Unplaced older items remain in overflow. */

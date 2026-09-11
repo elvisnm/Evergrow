@@ -13,7 +13,7 @@ export interface ProjectileContext {
   containers?: ContainerAttackContext;
   schedule(effect: GroundEffectRequest): void;
   player: Player; enemies: Enemy[]; world: WorldQuery;
-  damage(enemy: Enemy, amount: number, angle: number, melee: boolean, style?: ProjectileStyle, offense?: HitSnapshot): void;
+  damage(enemy: Enemy, amount: number, angle: number, melee: boolean, style?: ProjectileStyle, offense?: HitSnapshot, authoredBurn?: boolean): void;
   hurt(amount: number, angle: number, sourceLevel: number, damageType: DamageType, sourceKind?: EnemyKind): void;
   onScreen(enemy: Enemy): boolean;
   visible(ax: number, ay: number, bx: number, by: number): boolean;
@@ -24,7 +24,9 @@ function hit(projectile: Projectile, enemy: Enemy, context: ProjectileContext): 
   const effects = projectile.effects;
   projectile.hitIds.add(enemy.id);
   const lifeBefore = enemy.hp;
-  context.damage(enemy, projectile.damage, projectile.angle, false, projectile.effects?.style, projectile.effects?.offense);
+  const offense = effects?.offense;
+  context.damage(enemy, projectile.damage, projectile.angle, false, effects?.style,
+    offense, effects?.burnDuration !== undefined);
   if (enemy.state !== 'dead') {
     if (effects?.slowDuration) {
       applySlow(enemy, { duration: effects.slowDuration, factor: effects.slowFactor ?? .6 });

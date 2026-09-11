@@ -68,16 +68,16 @@ Attribute effects apply per point above the starting baseline of ten, including 
 
 | Attribute | Effect per point above ten |
 | --- | --- |
-| Strength | +2 percentage points of attack damage |
+| Strength | +1.5 percentage points of attack damage |
 | Dexterity | +0.25 percentage points of attack speed; +0.075 percentage points of critical chance |
-| Intelligence | +4 maximum mana; +3 percentage points of spell and added elemental damage |
+| Intelligence | +2 maximum mana; +1.5 percentage points of spell and added elemental damage |
 | Vitality | +6 maximum life |
 
 The September 9 Dexterity pass halves both per-point bonuses. This applies equally to assigned points, item/charm Dexterity and tree Dexterity; direct attack-speed and critical-chance bonuses keep their values. With no other bonuses, the critical cap now takes 1,000 additional Dexterity and the attack-speed cap 2,000. Existing builds recalculate normally without resetting attributes or saves. This delays saturation rather than removing the eventual caps.
 
 Flat and percentage modifiers add within their stat before conversion to derived multipliers. For example, `attackSpeedPercent: 4` means **+4%**, not a 4× multiplier. Item implicit modifiers, item affixes, and tree bonuses use the same `StatKey` vocabulary.
 
-Supported effects include life/mana, armor, attack/spell damage, attack speed, critical chance/damage, movement speed, cooldown reduction, life/mana regeneration, life on hit, block chance, and blocked-damage reduction. Block modifiers become active only with a usable equipped shield; chance caps at 75% and reduction at 90%, applied after armor. Base mana regeneration is 1/second; flat regeneration from gear and allocated nodes adds to it. Armor reduces incoming damage by `armor / (armor + 120 × (1 + 0.13 × (attackerLevel − 1)))`, capped at 80%. The character sheet estimates armor against the character's own level; combat uses the captured source level, including projectiles already in flight. Critical chance caps at 75%; critical damage starts at 1.5× and caps at 5×. Cooldown reduction caps at 75% and affects active-skill cooldowns and dodge-charge recovery. Movement multiplier caps at 1.75×; final basic attacks remain within 0.25–12 attacks/second. Other numeric bounds keep extreme generated values finite; these are engine limits, not completed balance targets.
+Supported effects include life/mana, armor, attack/spell damage, attack speed, critical chance/damage, movement speed, cooldown reduction, life/mana regeneration, life on hit, block chance, and blocked-damage reduction. Block modifiers become active only with a usable equipped shield; chance caps at 75% and reduction at 90%, applied after armor. Base mana regeneration is 1/second; mana-regeneration modifiers from gear and nodes use mana per five seconds and are divided by five before adding to the baseline. Armor reduces incoming damage by `armor / (armor + 120 × (1 + 0.13 × (attackerLevel − 1)))`, capped at 80%. The character sheet estimates armor against the character's own level; combat uses the captured source level, including projectiles already in flight. Critical chance caps at 75%; critical damage starts at 1.5× and caps at 5×. Cooldown reduction caps at 75% and affects active-skill cooldowns and dodge-charge recovery. Movement multiplier caps at 1.75×; final basic attacks remain within 0.25–12 attacks/second. Other numeric bounds keep extreme generated values finite; these are engine limits, not completed balance targets.
 
 The dual potion restores 42% of maximum life and 40% of maximum mana, with two charges and one recovered charge per eight kills. Every third kill drops a 12%-maximum-life pickup; other kills drop a 16%-maximum-mana pickup. These retain their starting values of 42 / 12 / 16 at 100 maximum resources while remaining useful as gear and attributes grow. No recovery exceeds the missing resource.
 
@@ -161,7 +161,7 @@ Code tests cover graph connectivity, stable unique nodes, themed cluster members
 
 ### Repeatable skills and action-speed split
 
-The first skill in each of the nine weapon schools has zero cooldown; second skills retain cooldowns and cost 24–40 base mana. All skills still consume mana and respect their action animation/recovery. Attack speed scales melee/bow actions; cast speed scales staff/wand basics and magic actions. Both apply after the shared 0.8 weapon cadence factor, used by basics and compatible skills across every weapon family. Gear and passives can reduce mana costs (75% maximum), with the same effective value used in activation and UI. See the current [skill catalog](weapons-and-skills.md) for costs and sources.
+The first skill in each of the nine weapon schools has zero cooldown; second skills retain cooldowns and cost 24–40 base mana. All skills still consume mana and respect their action animation/recovery. Attack speed scales melee/bow actions; cast speed scales staff/wand basics and magic actions. Both apply after the shared 0.8 weapon cadence factor, used by basics and compatible skills across every weapon family. Gear and passives can reduce mana costs (first 20% at full value, then diminishing returns toward 40%), with the same effective value used in activation and UI. See the current [skill catalog](weapons-and-skills.md) for costs and sources.
 
 Each of the five terraces now has a direct bridge between every pair of disciplines (15 guaranteed outer bridges), in addition to the three inner bridges and organically selected routes. Crossing a border needs at most two intermediate travel nodes.
 
@@ -210,3 +210,10 @@ Physical/spell damage, speed and potion **bonus** rows show increases above the 
 The detailed sheet now includes Fire, Frost, Lightning and Arcane resistance, starting at zero. Single-element and all-element equipment bonuses add per element, capped at 75%; hover/focus explains the calculation and individual sources. Armor and its same-level estimate now describe physical damage only. Shield block follows either physical armor or elemental resistance.
 
 Resistance rolls are restricted to rings, amulets, shields and charms, with at most one resistance family per item. [Equipment affixes](equipment-affixes.md#elemental-resistance--2026-09-09) owns current weights, strengths and upgrade limits. Charms now grant bonuses only in their dedicated grid; see [charms](charms.md). Resistance is derived from normal item modifiers; no save-version change or character reset is needed. Existing items retain their rolls and gain no resistance automatically.
+
+
+## Offensive attribute balance · local September 11 pass
+
+`attribute-content.ts` owns the 1.5-per-point Strength/Intelligence damage conversion used by both combat and detailed stats. It applies equally to assigned, equipped, charm and tree attributes; dedicated attack/spell percentage bonuses still add inside the same multiplier. Offensive attribute item budgets now taper rather than growing linearly. Dexterity/Vitality, direct damage affixes, skill potency and enemy rules are unchanged by this pass. See [before/after audit](offensive-attribute-balance-2026-09-11.md).
+
+Enchanter → Respec → Attributes provides one free full attribute refund per character. It returns assigned points only, restores base attributes to ten and preserves the skill build and equipment. The optional `attributeResetUsed: true` flag is saved with the refund; absent means available. Resources clamp without healing, stale quotes fail, and failed saves consume neither points nor the entitlement.

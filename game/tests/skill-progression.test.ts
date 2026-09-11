@@ -211,3 +211,14 @@ test('leaf passives affect only their owning skill and each new specialization b
     assert.deepEqual(resolveSkill(skill.id,p.derived,sheet),after);
   }
 });
+
+test('early equipment ranks remain valuable while deeper stacks taper without changing purchased ranks or costs',()=>{
+  const p=new Simulation(world,{spawn:false}).player,s=p.character;s.allocatedNodes=['origin','skill:fireball'];s.skillRanks.fireball=5;
+  const base=resolveSkill('fireball',p.derived,s);
+  const three=resolveSkill('fireball',{...p.derived,skillBonuses:{fireball:3}},s);
+  const ten=resolveSkill('fireball',{...p.derived,skillBonuses:{fireball:10}},s);
+  close(three.damageMultiplier/base.damageMultiplier,1.225);
+  close(ten.damageMultiplier/base.damageMultiplier,1.44375);
+  assert.equal(three.mana,base.mana);assert.equal(ten.mana,base.mana);assert.equal(ten.cooldown,base.cooldown);
+  assert.equal(ten.effectiveRank,15);assert.equal(s.skillRanks.fireball,5);
+});

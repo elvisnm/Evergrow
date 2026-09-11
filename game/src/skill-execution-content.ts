@@ -12,10 +12,15 @@ export type SkillExecution = (
   | { kind: 'projectile'; speed: number; radius: number; offsets: readonly number[];
       effects: Readonly<Omit<ProjectileEffects, 'burnDps' | 'groundDps'> & { burnDamageMultiplier?: number; groundDamageMultiplier?: number }> }
   | { kind: 'ground'; effect: 'meteor' | 'arrowRain' | 'storm' | 'frost'; radius: number; delay: number; duration: number; interval: number;
-      style: ProjectileStyle; scorch?: { readonly duration: number; readonly interval: number; readonly damageMultiplier: number }; scatter?: number; slow?: SlowEffect; stun?: number; follow?: boolean; burn?: { readonly duration: number; readonly damageMultiplier: number } }
+      style: ProjectileStyle; scatterRadiusMultiplier?: number; scorch?: { readonly duration: number; readonly interval: number; readonly damageMultiplier: number }; scatter?: number; slow?: SlowEffect; stun?: number; follow?: boolean; burn?: { readonly duration: number; readonly damageMultiplier: number } }
   | { kind: 'chain'; jumps: number; range: number; falloff: number; duration: number; style: ProjectileStyle; revisit?: boolean });
 
 export const GROUND_EFFECT_RULES = Object.freeze({ maximum: 16, minimumInterval: .05 });
+/** One full life-on-hit proc, then smaller procs for new targets only. */
+export const CHAIN_SUSTAIN = Object.freeze({ subsequentTarget: .25 });
+export function chainLifeOnHitMultiplier(contact: number, revisited: boolean): number {
+  return revisited ? 0 : contact === 0 ? 1 : CHAIN_SUSTAIN.subsequentTarget;
+}
 export function groundEffectPulseCount(effect: { duration: number; interval: number }): number {
   return Math.max(1, Math.ceil(effect.duration / Math.max(GROUND_EFFECT_RULES.minimumInterval, effect.interval)));
 }

@@ -6,6 +6,8 @@ Frosted-material refresh (September 10): `ui-glass.css` owns the shared square-e
 
 `tooltip-material.css` shares frosted surfaces across explanations and item cards. Item cards retain their rarity colors, with stronger corner light and a single short sheen on the candidate card. Equipped comparison cards stay quieter. Reduced motion removes the sheen; reduced transparency and unsupported blur use opaque material, and forced colors remove decoration. `inventory-glass.css` only adjusts inventory wells to reveal the shared material.
 
+Fantasy-material refinement (v0.3.8): the shared frosted surfaces now use silver-blue frosted glass, tarnished silver bevels, small procedural silver corner fittings and a faint etched grain. The world still supplies the background tint; no panel-specific hues were restored. Inventory uses a shield emblem and recessed neutral wells. Item inspection concentrates rarity light in the frame, adds a tiny gemstone divider, and replaces the broad sheen with a single inset-engraving glint. The original cool palette is restored at the user’s request, retaining the medieval framing and layout refinements. A second refinement reduces frame fittings to 22px (16px on narrow screens), reserves header clearance, quiets the etched grain, and carries the metal bevels through square controls. Inventory uses an arched portrait niche, ruled section headings and recessed pack cells; tooltip stat rows have subtle engraved separators. Text and numerical fonts, interactions and save behavior stay unchanged. Reduced motion removes the glint; transparency and forced-color fallbacks remain available.
+
 The selected bottom-HUD direction is **The Astral Instrument**: calibrated silver rings, celestial engraving, and separate black-steel skill plates. The shared `silver`, `silverDim`, `steel`, and `steelDeep` tokens supply its control materials. Use these and restrained celestial edge details when expanding the inventory; keep content legible and controls familiar. `hud-frame.ts` draws the metalwork, `hud-layout.ts` owns its shared geometry, and `hud.ts` presents live resource and ability states. The six main wells reserve LMB for basic attack and RMB/1–4 for five assignable skills; Q potion and Space dodge sit in separate utility plates. Preserve this distinction when adding equipped skills, and keep unassigned wells visibly empty and inert.
 
 ## Shared foundations
@@ -25,6 +27,8 @@ The selected bottom-HUD direction is **The Astral Instrument**: calibrated silve
 | `.ui-badge`, `.ui-status`, `.ui-key` | Compact metadata, feedback, and key bindings |
 | `.ui-tooltip` | Shared detail-card surface |
 | `.ui-slot` | Shared equipment and bag-slot presentation primitive |
+
+Item artwork uses per-render SVG resource IDs for gradients and clipping. Never derive these IDs only from item identity: a hidden inventory and a visible vendor can render the same item simultaneously, and SVG IDs are document-wide. Gradient fills retain a solid material-color fallback.
 
 `ui-icons.ts` provides decorative code-defined SVG icons with a common grid and stroke. Give every icon-only button an accessible name. `ui-components.ts` exports the icons, `escapeUI()` for interpolated markup, and dialog focus management. Prefer `textContent` for dynamic labels when no markup is needed.
 
@@ -57,7 +61,7 @@ Use native `disabled` when an action is unavailable. `aria-disabled` communicate
 
 All tooltips share `ui-tooltip-motion.ts`: a 160ms fade/lift entrance and 120ms exit, with only 4px of movement. DOM cards use `.ui-tooltip` and toggle `hidden`; CSS starting styles and discrete display transitions preserve the outgoing card through its exit without timers or detached overlays. Button hints use the same tokens. Canvas tooltips use `TooltipMotion`, retaining outgoing content and requesting frames only while transitioning. Reversing hover preserves current opacity; changing targets while visible keeps the card visible. Reduced motion bypasses both treatments. Older engines without discrete transitions fall back to immediate DOM hiding.
 
-Short control hints use `data-tooltip` (including the transparent HUD controls); they appear on hover or keyboard focus. Use `data-tooltip-placement="below"` near a panel's top edge and `data-tooltip-align="end"` near its right edge. Essential information belongs in a label or accessible name, not only a tooltip.
+Short control hints use `data-tooltip` (including the transparent HUD controls); they appear on hover or keyboard focus. Use `data-tooltip-placement="below"` near a panel's top edge and `data-tooltip-align="end"` near its right edge. Essential information belongs in a label or accessible name, not only a tooltip. They render through the single fixed-position `.ui-hint` surface `ui-hint.ts` installs from `installUITheme`, so scrolling panel columns cannot clip them; placement and align attributes stay hints for that surface.
 
 ## Implemented surfaces
 
@@ -115,6 +119,10 @@ Successful inventory insertion emits a typed item payload; a full bag emits a se
 
 
 ### Ground item labels
+
+Equipment and charm nameplates render at 85% of their authored size, uniformly scaling text, icons, padding and packing gaps. Hover rectangles return to display coordinates at the same scale; item silhouettes and the full hover tooltip keep their existing size. Loot-name options use two inline styled buttons with an explicit selected state, avoiding native dropdown colors.
+
+Escape → Options → Loot names offers **Always** (default) and **Hold Ctrl**, persisted in device preferences rather than character saves. Either Ctrl key reveals all nameplates while held. Without Ctrl, hovering a physical item reveals its plate; the revealed plate remains clickable while hovered, and a selected pickup target stays visible while approaching it. Hidden plates have no clickable rectangle. Blur, pause and input cancellation clear the held reveal. Touch/controller input keeps names visible because it has no Ctrl key.
 
 Mouse hover on a label or its item silhouette highlights the ground label and shows one shared item card fixed to the bottom-right screen corner. It includes the full name, rarity, item/required level, weapon or shield properties and item bonuses, without equipped-item comparison columns. `ground-loot-highlight.ts` owns both surfaces and caches the card until the hovered item or player level changes; it does not rebuild markup every frame. The card uses shared tooltip motion, reduced-motion support, square corners and viewport/safe-area bounds. It never intercepts clicks. Leaving hover, entering a panel, switching to touch/controller or collecting the item hides inspection. A click-to-walk target retains its highlight without keeping its tooltip open. Inspection does not gate on nearby enemies, pause combat or change pickup rules. `/loot.html?pickup&state=hovered` stages this presentation without gameplay or save access.
 
@@ -189,3 +197,7 @@ Skill hover cards separate node identity, the owning skill, effects, cast facts 
 ## Main-menu changelog
 
 What's new opens a read-only release panel from the character hall. A compact version/date/time history sits beside New/Tweaks/Fixes notes; narrow layouts turn the history into a horizontal strip. Release headings use version numbers only; bullets stay brief. Notes use the shared game/numeral fonts, restrained category colors and the existing window shell. Focus is trapped in the reader and returns to the opener; Escape, controller B and native Back dismiss it first. LB/RB changes releases and the right stick scrolls notes. The same bundled `CHANGELOG.md` powers the repository and panel, with no network or save access. See [release workflow](releases.md).
+
+The equipment heading displays a compact Gear power score using the same equipped-only calculation as the leaderboard. It refreshes with the character sheet, counts two-handed weapons across both hands, and replaces the occupied-slot counter.
+
+Shared control hover uses a thin translucent silver edge and a slight surface lift. Keyboard focus retains a distinct 1px silver outline; semantic danger, rarity and valid-drop colors remain separate.

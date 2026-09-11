@@ -1,3 +1,6 @@
+import { ATTRIBUTE_DAMAGE_BONUSES } from './attribute-content.ts';
+import { MANA_RULES } from './mana-content.ts';
+import { CHAIN_SUSTAIN } from './skill-execution-content.ts';
 import { CHARM_REWARD_CAPS } from './charm-content.ts';
 import { ELEMENTS, RESISTANCE_LABELS, RESISTANCE_RULES } from './resistance-content.ts';
 import type { Player, WeaponDefinition } from './model.ts';
@@ -47,9 +50,9 @@ export function characterStatDetails(p: Player): StatDetailGroup[] {
   };
   const attributes = (['strength', 'dexterity', 'intelligence', 'vitality'] as const).map(attribute =>
     addAttribute(row(attribute, STAT_LABELS[attribute], s.attributes[attribute], n(s.attributes[attribute], 0), {
-      strength: '+2% physical damage per added point.',
+      strength: `+${ATTRIBUTE_DAMAGE_BONUSES.strength}% physical damage per added point.`,
       dexterity: `+${DEXTERITY_BONUSES.attackSpeedPercent}% attack speed and +${DEXTERITY_BONUSES.critChance}% critical chance per added point.`,
-      intelligence: '+4 mana and +3% spell / elemental damage per added point.',
+      intelligence: `+${MANA_RULES.perIntelligence} mana and +${ATTRIBUTE_DAMAGE_BONUSES.intelligence}% spell / elemental damage per added point.`,
       vitality: '+6 maximum life per added point.',
     }[attribute], 'Starting + assigned + gear + charms + skill tree', [attribute]), attribute));
   const weaponRows = (weapon: WeaponDefinition, off = false): StatDetail[] => {
@@ -69,9 +72,9 @@ export function characterStatDetails(p: Player): StatDetailGroup[] {
     return [damage, speed];
   };
   const offense = [...weaponRows(p.equipment.mainHand), ...(p.equipment.offHand?.kind === 'weapon' ? weaponRows(p.equipment.offHand.weapon, true) : []),
-    addAttribute(row('attackBonus', 'Physical damage bonus', s.attackDamageMultiplier - 1, pct(s.attackDamageMultiplier - 1), 'Scales physical weapon damage, including bow attacks.', `+${attributeBonus('strength', 2)}% Strength + damage bonuses\nDamage × ${n(s.attackDamageMultiplier)}`, ['strength', 'damagePercent']), 'strength'),
+    addAttribute(row('attackBonus', 'Physical damage bonus', s.attackDamageMultiplier - 1, pct(s.attackDamageMultiplier - 1), 'Scales physical weapon damage, including bow attacks.', `+${attributeBonus('strength', ATTRIBUTE_DAMAGE_BONUSES.strength)}% Strength + damage bonuses\nDamage × ${n(s.attackDamageMultiplier)}`, ['strength', 'damagePercent']), 'strength'),
     addAttribute(row('attackSpeed', 'Attack speed bonus', s.attackSpeedMultiplier - 1, pct(s.attackSpeedMultiplier - 1), 'Affects melee weapons and bows. Wands and staves use cast speed.', `+${attributeBonus('dexterity', DEXTERITY_BONUSES.attackSpeedPercent)}% Dexterity + speed bonuses\nTotal speed: 25–600%`, ['dexterity', 'attackSpeedPercent']), 'dexterity'),
-    addAttribute(row('spellDamage', 'Spell damage bonus', s.spellDamageMultiplier - 1, pct(s.spellDamageMultiplier - 1), 'Scales spells, basic magic bolts and weapon enchantment damage.', `+${attributeBonus('intelligence', 3)}% Intelligence + damage bonuses\nDamage × ${n(s.spellDamageMultiplier)}`, ['intelligence', 'spellDamagePercent']), 'intelligence'),
+    addAttribute(row('spellDamage', 'Spell damage bonus', s.spellDamageMultiplier - 1, pct(s.spellDamageMultiplier - 1), 'Scales spells, basic magic bolts and weapon enchantment damage.', `+${attributeBonus('intelligence', ATTRIBUTE_DAMAGE_BONUSES.intelligence)}% Intelligence + damage bonuses\nDamage × ${n(s.spellDamageMultiplier)}`, ['intelligence', 'spellDamagePercent']), 'intelligence'),
     row('castSpeed', 'Cast speed bonus', s.castSpeedMultiplier - 1, pct(s.castSpeedMultiplier - 1), 'Shortens magic casting actions. Does not reduce cooldowns.', `Sum of cast speed bonuses\nTotal speed: 25–600%`, ['castSpeedPercent']),
     addAttribute(row('critChance', 'Critical chance', s.critChance, pct(s.critChance), 'Chance to critically strike. Burn damage cannot crit.', `+${attributeBonus('dexterity', DEXTERITY_BONUSES.critChance)}% Dexterity + critical bonuses\nCap: 75%`, ['dexterity', 'critChance']), 'dexterity'),
     row('critDamage', 'Critical damage', s.critMultiplier, pct(s.critMultiplier), 'Damage on a critical hit. 150% = 1.5× damage.', `150% + critical damage bonuses\nLimit: 100–500%`, ['critDamage']),
@@ -97,9 +100,9 @@ export function characterStatDetails(p: Player): StatDetailGroup[] {
   const resources = [
     addAttribute(row('maxHp', 'Maximum life', s.maxHp, n(s.maxHp, 0), 'Life capacity. Increasing it does not heal you.', `${PLAYER_DEFAULTS.maxHp} + ${attributeBonus('vitality', 6)} Vitality + life bonuses`, ['vitality', 'maxHp']), 'vitality'),
     row('lifeRegen', 'Life regeneration', s.lifeRegeneration, `${n(s.lifeRegeneration)} / s`, 'Restores life continuously, up to maximum life.', 'Sum of regeneration bonuses', ['lifeRegen']),
-    row('lifeOnHit', 'Life on hit', s.lifeOnHit, n(s.lifeOnHit, 1), 'Life restored per direct hit. Periodic damage does not trigger it.', 'Sum of life-on-hit bonuses', ['lifeOnHit']),
-    addAttribute(row('maxMana', 'Maximum mana', s.maxMana, n(s.maxMana, 0), 'Mana capacity. Increasing it does not refill mana.', `${PLAYER_DEFAULTS.maxMana} + ${attributeBonus('intelligence', 4)} Intelligence + mana bonuses`, ['intelligence', 'maxMana']), 'intelligence'),
-    row('manaRegen', 'Mana regeneration', s.manaRegeneration, `${n(s.manaRegeneration)} / s`, 'Restores mana continuously, up to maximum mana.', `${PLAYER_DEFAULTS.manaRegeneration} / s + regeneration bonuses`, ['manaRegen']),
+    row('lifeOnHit', 'Life on hit', s.lifeOnHit, n(s.lifeOnHit, 1), `Life per direct hit. Chains: ${CHAIN_SUSTAIN.subsequentTarget * 100}% on additional targets, none on repeat targets. Periodic damage gives none.`, 'Sum of life-on-hit bonuses', ['lifeOnHit']),
+    addAttribute(row('maxMana', 'Maximum mana', s.maxMana, n(s.maxMana, 0), 'Mana capacity. Increasing it does not refill mana.', `${PLAYER_DEFAULTS.maxMana} + ${attributeBonus('intelligence', MANA_RULES.perIntelligence)} Intelligence + mana bonuses`, ['intelligence', 'maxMana']), 'intelligence'),
+    row('manaRegen', 'Mana regeneration', s.manaRegeneration, `${n(s.manaRegeneration)} / s`, 'Restores mana continuously, up to maximum mana.', `${PLAYER_DEFAULTS.manaRegeneration} / s + bonuses ÷ ${MANA_RULES.regenerationPeriod}`, ['manaRegen']),
     row('manaOnKill', 'Mana on kill', s.manaOnKill, n(s.manaOnKill, 1), 'Restores mana when you kill an enemy, up to missing mana.', 'Sum of mana-on-kill bonuses', ['manaOnKill']),
     row('potion', 'Potion restoration bonus', s.potionMultiplier - 1, pct(s.potionMultiplier - 1), 'Boosts potion life and mana recovery, up to missing resources.', `${pct(PLAYER_ABILITIES.potion.lifeFraction)} life / ${pct(PLAYER_ABILITIES.potion.manaFraction)} mana × ${n(s.potionMultiplier)}\nBonus cap: 100%`, ['potionPercent']),
   ];
@@ -107,7 +110,7 @@ export function characterStatDetails(p: Player): StatDetailGroup[] {
     row('goldFind','Gold found',s.goldFindMultiplier-1,pct(s.goldFindMultiplier-1),'Increases gold dropped by enemies, chests and breakable objects. Excludes trading.',`Loot gold × ${n(s.goldFindMultiplier)}\nBonus cap: ${CHARM_REWARD_CAPS.gold}%`,['goldFindPercent']),
     row('xpGain','Experience gained',s.xpGainMultiplier-1,pct(s.xpGainMultiplier-1),'Increases experience from kills, events and journeys.',`Experience × ${n(s.xpGainMultiplier)}\nBonus cap: ${CHARM_REWARD_CAPS.xp}%`,['xpGainPercent']),
     row('movement', 'Movement speed', s.moveSpeedMultiplier, pct(s.moveSpeedMultiplier), '100% is normal speed. Attacks slow movement; dodge has its own speed.', `${PLAYER_MOVEMENT.speed} × ${n(s.moveSpeedMultiplier)} = ${n(PLAYER_MOVEMENT.speed * s.moveSpeedMultiplier)} units / s\nBefore action penalties · Limit: 50–175%`, ['moveSpeedPercent']),
-    row('manaCost', 'Mana cost reduction', 1 - s.manaCostMultiplier, pct(1 - s.manaCostMultiplier), 'Reduces action mana costs. Skill minimums still apply.', `Action cost × ${n(s.manaCostMultiplier)}\nCap: 75% · Rounded per action`, ['manaCostPercent']),
+    row('manaCost', 'Mana cost reduction', 1 - s.manaCostMultiplier, pct(1 - s.manaCostMultiplier), 'Reduces action mana costs. Skill minimums still apply.', `Action cost × ${n(s.manaCostMultiplier)}\nFirst 20% at full value · Further bonuses taper toward 40%`, ['manaCostPercent']),
     row('cooldown', 'Cooldown reduction', 1 - s.cooldownMultiplier, pct(1 - s.cooldownMultiplier), 'Shortens skill, dodge and potion cooldowns.', `Cooldown × ${n(s.cooldownMultiplier)}\nCap: 75% · Skill minimums still apply`, ['cooldownPercent']),
     row('area', 'Area of effect', s.areaMultiplier ** 2 - 1, `+${pct(s.areaMultiplier ** 2 - 1)}`, 'Enlarges skill sweeps, novas and explosions. Does not extend projectile travel.', `Radius / reach × ${n(s.areaMultiplier)}\nArea bonus cap: ${AFFIX_COMBAT_RULES.maxAreaPercent}%`, ['areaPercent']),
     row('pierce', 'Projectile pierce', s.projectilePierce, n(s.projectilePierce, 0), 'Extra projectile targets. Explosive projectiles still detonate on contact.', `Sum of pierce bonuses, rounded down\nCap: ${AFFIX_COMBAT_RULES.maxPierce} extra targets`, ['projectilePierce']),

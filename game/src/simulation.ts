@@ -1,3 +1,5 @@
+import { manaVialAmount, manaVialRestoration } from './mana-content.ts';
+import { roamingEscortRole, roamingFormationRadius, roamingMemberOffset, roamingMemberRank } from './roaming-encounters.ts';
 import { packSpaceProblem } from './inventory-grid.ts';
 import type { DamageType } from './model.ts';
 import { GroundItemPickup } from './ground-item-pickup.ts';
@@ -35,7 +37,7 @@ import { createBaseStats, createStartingEquipment, deriveAttackStats, basicAttac
 import { getActiveSwingOffset } from './attack-motion.ts';
 import { RANGED_BASIC_ATTACK_PHASES, BASIC_ATTACK_PHASES, COMBAT_TIMING, SKILL_CAST_MOTION, ENEMY_DEFINITIONS, LOOT_RULES, PLAYER_ABILITIES,
   PLAYER_DEFAULTS, PLAYER_MOVEMENT, type ProjectileDefinition } from './combat-content.ts';
-import { chooseEncounterEnemy, chooseEncounterRank, ENCOUNTER_RULES } from './encounter-director.ts';
+import { chooseEncounterEnemy, ENCOUNTER_RULES } from './encounter-director.ts';
 import { circleIntersectsSector, segmentDistanceSquared, hasLineOfSight } from './combat-geometry.ts';
 import { refreshCharacter } from './character.ts';
 import { createCharacterSheet, TIER_COLORS } from './items.ts';
@@ -423,6 +425,7 @@ export class Simulation {
     for (const id of Object.keys(p.skillCooldowns) as SkillId[]) p.skillCooldowns[id] = Math.max(0, p.skillCooldowns[id]! - dt);
     p.healFlash = Math.max(0, p.healFlash - dt);
     metric(p.chronicle,'manaRestored',Math.min(p.maxMana-p.mana,p.derived.manaRegeneration*dt));
+    metric(p.chronicle,'manaRecovery:passive',Math.min(p.maxMana-p.mana,p.derived.manaRegeneration*dt));
     p.mana = Math.min(p.maxMana, p.mana + p.derived.manaRegeneration * dt);
     metric(p.chronicle,'healing',Math.min(p.maxHp-p.hp,p.derived.lifeRegeneration*dt));
     p.hp = Math.min(p.maxHp, p.hp + p.derived.lifeRegeneration * dt);
@@ -620,7 +623,7 @@ export class Simulation {
     return hasLineOfSight(this.world, ax, ay, bx, by);
   }
 
-  private damageEnemy(enemy: Enemy, damage: number, angle: number, melee: boolean, periodic = false, style?: ProjectileStyle, elementalDamage?: number, offense?: HitSnapshot): void {
+  private damageEnemy(enemy: Enemy, damage: number, angle: number, melee: boolean, periodic = false, style?: ProjectileStyle, elementalDamage?: number, offense?: HitSnapshot, authoredBurn = false): void {
     damageEnemy(enemy, damage, angle, melee, {
       player: this.player, enemies: this.enemies, random: () => this.random(),
       visible: (ax, ay, bx, by) => this.lineOfSight(ax, ay, bx, by), emit: event => this.emit(event),
@@ -632,7 +635,7 @@ export class Simulation {
         });
         this.kills = reward.kills; this.killRecharge = reward.recharge;
       },
-    }, periodic, style, elementalDamage, offense);
+    }, periodic, style, elementalDamage, offense, authoredBurn);
   }
 
   private updateEnemies(dt: number): void {
@@ -741,7 +744,7 @@ export class Simulation {
       containers: this.containerContext(),
       player: this.player, enemies: this.enemies, world: this.world,
       onScreen: enemy => enemyInCombatViewport(enemy, this.combatViewport),
-      damage: (enemy, amount, angle, melee, style, offense) => this.damageEnemy(enemy, amount, angle, melee, false, style, undefined, offense),
+      damage: (enemy, amount, angle, melee, style, offense, authoredBurn) => this.damageEnemy(enemy, amount, angle, melee, false, style, undefined, offense, authoredBurn),
       hurt: (amount, angle, sourceLevel, damageType, sourceKind) => this.damagePlayer(amount, angle, sourceLevel, damageType, sourceKind),
       visible: (ax, ay, bx, by) => this.lineOfSight(ax, ay, bx, by),
       emit: event => this.emit(event),
@@ -761,7 +764,7 @@ export class Simulation {
       containers: this.containerContext(),
       player: this.player,
       enemies: this.enemies, visible: (ax, ay, bx, by) => this.lineOfSight(ax, ay, bx, by),
-      damage: (enemy, amount, angle, melee, style, periodic = false, offense) => this.damageEnemy(enemy, amount, angle, melee, periodic, style, undefined, offense),
+      damage: (enemy, amount, angle, melee, style, periodic = false, offense, authoredBurn) => this.damageEnemy(enemy, amount, angle, melee, periodic, style, undefined, offense, authoredBurn),
       emit: event => this.emit(event),
     });
   }
@@ -778,7 +781,7 @@ export class Simulation {
       if (distance < LOOT_RULES.collectDistance) {
         const before = pickup.kind === 'health' ? p.hp : p.mana;
         if (pickup.kind === 'health') p.hp = Math.min(p.maxHp, p.hp + p.maxHp * pickup.restoreFraction);
-        else p.mana = Math.min(p.maxMana, p.mana + p.maxMana * pickup.restoreFraction);
+        else p.mana = Math.min(p.maxMana, p.mana + manaVialRestoration(p.maxMana,pickup.restoreAmount ?? manaVialAmount(1)));
         const value = (pickup.kind === 'health' ? p.hp : p.mana) - before;
         pickup.life = 0;
         this.emit({ type: 'pickup', x: pickup.x, y: pickup.y, value, heavy: pickup.kind === 'health' });
@@ -832,26 +835,37 @@ export class Simulation {
 
   private spawnRoamingGroup(view: SpawnExclusion): number {
     const living = this.enemies.filter(enemy => enemy.state !== 'dead');
-    const size = this.roaming.groupSize(ROAMING_RULES.maxGroupSize, this.random());
+    const sizeRoll=this.random();
+    let checks=0;
     for (let attempt = 0; attempt < ENCOUNTER_RULES.maxSpawnAttempts; attempt++) {
-      const anchor = roamingSpawnAnchor(this.player, view, this.roaming.heading, () => this.random(), attempt);
+      // Reserve the largest footprint before capturing the anchor's regional
+      // level: widening a pack afterward must not move it into another district.
+      const anchor = roamingSpawnAnchor(this.player, view, this.roaming.heading, () => this.random(), attempt,
+        roamingFormationRadius(ROAMING_RULES.maxGroupSize));
       const scaling = encounterScaleAt(anchor.x, anchor.y, this.world.seed ?? this.options.seed!, this.player.level);
+      const size = this.roaming.groupSize(scaling.base,sizeRoll);
       const members: Array<{ kind: EnemyKind; rank: EnemyRank; x: number; y: number }> = [];
       for (let index = 0; index < size; index++) {
-        const angle = anchor.angle + (index - 1) * Math.PI * 2 / Math.max(1, size - 1) + (this.random() - .5) * .12;
-        const radius = index === 0 ? 0 : ROAMING_RULES.groupRadius * (.85 + this.random() * .15);
-        const x = anchor.x + Math.cos(angle) * radius, y = anchor.y + Math.sin(angle) * radius;
-        const biome = (this.world.sampleBiome?.(x, y) ?? sampleBiome(x, y)).id;
-        const preferred = index ? ROAMING_GROUPS[members[0].kind]?.[index] : undefined;
-        const kind = chooseEncounterEnemy(biome, () => this.random(), preferred);
-        if (!isSpawnHidden(x, y, view, ENEMY_DEFINITIONS[kind].radius)
-          || this.world.isSanctuary?.(x, y)
-          || this.world.blocked(x, y, ENEMY_DEFINITIONS[kind].radius + ENCOUNTER_RULES.spawnClearance)
-          || this.world.getEnemyCamps?.(x - 60, y - 60, 120, 120)
-            .some(camp => Math.hypot(camp.x - x, camp.y - y) < camp.radius + 60)
-          || [...living, ...members].some(enemy => Math.hypot(enemy.x - x, enemy.y - y) < ENCOUNTER_RULES.minimumSeparation)) break;
-        const rank = chooseEncounterRank(scaling.base, this.random());
-        members.push({ kind, rank, x, y });
+        for(let placement=0;placement<ROAMING_RULES.memberPlacementAttempts;placement++){
+          if(++checks>ROAMING_RULES.placementBudget)return 0;
+          const offset=roamingMemberOffset(size,index,anchor.angle,()=>this.random(),placement);
+          const x = anchor.x + offset.x, y = anchor.y + offset.y;
+          const biome = (this.world.sampleBiome?.(x, y) ?? sampleBiome(x, y)).id;
+          const recipe=index?ROAMING_GROUPS[members[0].kind]:undefined;
+          const preferred = recipe ? recipe[1+(index-1)%(recipe.length-1)] : undefined;
+          const kind = chooseEncounterEnemy(biome, () => this.random(), preferred, roamingEscortRole(members[0], index));
+          if (!isSpawnHidden(x, y, view, ENEMY_DEFINITIONS[kind].radius)
+            || this.world.isSanctuary?.(x, y)
+            || this.world.blocked(x, y, ENEMY_DEFINITIONS[kind].radius + ENCOUNTER_RULES.spawnClearance)
+            || this.world.getEnemyCamps?.(x - 60, y - 60, 120, 120)
+              .some(camp => Math.hypot(camp.x - x, camp.y - y) < camp.radius + 60)
+            || living.some(enemy => Math.hypot(enemy.x - x, enemy.y - y) < ENCOUNTER_RULES.minimumSeparation)
+            || members.some(enemy => Math.hypot(enemy.x - x, enemy.y - y) < ENCOUNTER_RULES.minimumSeparation)) continue;
+          const rank = roamingMemberRank(scaling.base,index,this.random());
+          members.push({ kind, rank, x, y });
+          break;
+        }
+        if(members.length!==index+1)break;
       }
       if (members.length !== size) continue;
       // A loose encounter is validated together, so a single blocked member does

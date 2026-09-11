@@ -1,5 +1,133 @@
 # Evergrow changelog
 
+## v0.3.14 — 2026-09-11T16:16:00Z
+
+### New
+
+- Greater affixes carry a silver star on ground loot, pickup notifications, inventory tiles and tooltips.
+- The enchanter offers one free attribute reset per character, refunding assigned points.
+
+### Tweaks
+
+- Item and charm affix rolls have a wider range: excellent rolls are stronger and weak rolls are weaker.
+- Strength and Intelligence each grant 1.5% damage per point above ten; their item bonuses grow more slowly.
+- Equipment skill ranks remain valuable, with smaller damage gains beyond the first three bonus ranks.
+- Elite health gradually increases above level 14, reaching 50% extra at level 37; ordinary foes are unchanged.
+- Shattered Sky spreads its five impacts across a wider area.
+
+### Fixes
+
+- Fireball uses its intended burn rate instead of combining it with the stronger basic-fire burn.
+
+> Existing characters retain their progress. Existing item bonuses update when loaded; no save reset is required. Reload the game to apply this update.
+
+## v0.3.13 — 2026-09-11T13:50:00Z
+
+### Tweaks
+
+- Intelligence grants two maximum mana per point instead of four; its spell damage bonus is unchanged.
+- Maximum mana, mana regeneration and mana-on-kill bonuses grow more slowly on equipment and charms.
+- Regeneration bonuses display mana restored per five seconds, allowing smaller whole-number rolls on charms.
+- Mana cost reduction tapers above 20%, approaching a 40% maximum.
+- Dropped mana vials restore an amount based on the defeated monster's level, up to 16% of your maximum mana.
+
+### Fixes
+
+- Mana regeneration comparisons use matching units for the item bonus and equipment change.
+
+> Existing characters retain their progress. Existing items receive the updated mana bonuses when loaded; no save reset is required. Reload the game to apply this update.
+
+## v0.3.12 — 2026-09-11T09:19:00Z
+
+### Tweaks
+
+- Elites mix quicker, lighter basic attacks with full-strength strikes, creating steadier pressure.
+- Bosses alternate major attacks with weaker close-range jabs or single ranged bolts.
+- Archers, casters and several wilderness foes prepare basic attacks faster.
+- Melee enemies track movement longer before committing to their strike.
+- Elites and bosses pause less between attacks, while heavy attacks retain clear warnings.
+- Small variations in enemy attack timing make packs less likely to strike in unison.
+
+### Fixes
+
+- Bosses choose a ranged attack when their queued melee sweep cannot reach you.
+- The Grave Marshal attacks instead of rallying when no nearby surviving guards can benefit.
+- Warden attack warnings correctly show when major attacks have locked their aim.
+
+> Existing characters and progress are preserved. No save reset is required.
+
+## v0.3.11 — 2026-09-11T08:56:00Z
+
+### New
+
+- Ground loot labels can stay visible or appear while holding Ctrl; hovering an item always reveals its label.
+
+### Tweaks
+
+- Wilderness packs grow with encounter level, from 4–6 enemies early on to 14–20 at level 61 and above.
+- Larger packs spread into wider formations, with most additional enemies remaining ordinary foes.
+- Elite-led groups bring more varied support, including ranged enemies, heavy fighters and flankers.
+- Elites and bosses hit 25% harder and recover faster between attacks, while keeping their attack warnings.
+- Veterans, elites and bosses resist repeated stuns, freezes and knockback, giving them chances to fight back.
+- Arc Lightning grants full life on hit on its first target and one quarter on additional targets; repeat bounces no longer heal again.
+- Normal enemies drop one third fewer common equipment items; charms and Magic-or-better drops keep their rates.
+- Dropped charms have distinctive runestone labels, and ground loot nameplates are more compact.
+
+### Fixes
+
+- Items render fully in inventory and vendor grids instead of sometimes showing only their outline.
+- Loot visibility controls use consistent, readable menu styling.
+- Repeated interruptions no longer let dangerous enemies skip their attack recovery.
+
+> Existing characters and progress are preserved. No save reset is required.
+
+## v0.3.10 — 2026-09-10T19:19:00Z
+
+### Fixes
+
+- Expedition tables can be used from every reachable side, including from behind.
+- Blocked or out-of-reach tables no longer incorrectly show the level-20 requirement.
+- The expedition map background fills the panel, with the route kept neatly centered.
+- Cloud characters show a proper loading state instead of briefly displaying an invalid, unavailable slot.
+
+> Existing characters and progress are unchanged.
+
+## v0.3.9 — 2026-09-10T19:13:00Z
+
+### Tweaks
+
+- Cloud characters check the server when selected and again before Continue.
+- Conflicting cloud and device copies appear separately, with dates and progress to help you choose.
+- Offline copies and progress awaiting upload are clearly labeled.
+
+### Fixes
+
+- An old device recovery no longer silently replaces the newer cloud character in the hall.
+- Interrupted uploads and unreadable recovery copies no longer hide valid cloud progress.
+- Background synchronization refreshes the selected character.
+
+> Existing characters and progress are preserved. No save reset is required.
+
+## v0.3.8 — 2026-09-10T18:57:00Z
+
+### New
+
+- Equipment now shows a discreet gear-power score that updates as you change gear and matches the leaderboard.
+
+### Tweaks
+
+- Frosted panels keep their cool silver-blue colors with finer metal frames, cleaner controls and more subtle highlights.
+- Inventory sections have clearer dividers and recessed grids, with a refined frame around your character.
+- Item tooltips use quieter rarity accents, finer stat separators and a brief edge glint.
+
+### Fixes
+
+- Inventory items stay within their grid footprints, including narrow one-cell items.
+- Window corners no longer crowd the emblem or close button on narrow screens.
+- Weapon damage stats blend into the tooltip without a pale background overlay.
+
+> Existing characters and progress are unchanged.
+
 ## v0.3.7 — 2026-09-10T12:22:00Z
 
 ### Tweaks

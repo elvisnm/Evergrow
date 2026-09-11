@@ -54,7 +54,7 @@ Worn starter clothing begins without base protection. A successful service impro
 ## Damage and hybrid hands
 
 - Physical melee/bow damage = base physical damage × attack multiplier. Each Strength above 10 supplies +2% attack damage.
-- Added elemental melee damage = the weapon's elemental affix × spell multiplier. Each Intelligence above 10 supplies +3% spell/elemental damage and +4 mana.
+- Added elemental melee damage = the weapon's elemental affix × spell multiplier. Each Intelligence above 10 supplies +3% spell/elemental damage and +2 mana.
 - Sum the two portions, then round once. Strength does not scale the elemental portion; Intelligence does not scale the physical portion. Critical hits multiply the combined direct hit. There is no double multiplication.
 - Staff/wand bolts remain base elemental damage × spell multiplier. Melee/bows use attack speed; wands/staves and magic skills use cast speed.
 - Skill potency multiplies the compatible weapon's derived hit, including its elemental portion for melee skills. A fire sword does not add damage to a separate wand spell or to the other hand.
@@ -121,3 +121,33 @@ Players start at **0% Fire, Frost, Lightning and Arcane resistance**. Rings, amu
 Growth uses `25n / (25 + n)`, where `n = item level - 1`; roll quality, rarity and enhancement apply before the hard per-roll limit. These are percentage points and relative selection weights, not drop probabilities. Jewelry profile affinity still applies. Rerolls, rarity upgrades and releveling share these rules. Common items have no explicit affixes and therefore no resistance. No new resistance implicits, passive nodes or automatic level bonuses are introduced.
 
 For each element, add its specific bonuses and all-element bonuses, then clamp the total to **0–75%**. Four all-resistance pieces can supply at most 32% to all elements; reaching the cap requires focused single-element investment. Charms supply additional investment through their separate size budgets; see [charms](charms.md). Item comparisons and detailed-stat tooltips show the actual capped totals and named sources. See [incoming damage](progression-and-loot.md#item-growth-and-defenses) for combat rules.
+
+## Local mana budget pass — September 11, 2026
+
+Mana regeneration item rolls are whole **mana per five seconds**, divided by five in the derived combat stat. Life regeneration remains life per second. The Wellspring now uses `8 + 0.8 × bounded growth`, Clarity `2 + 0.12 × bounded growth`, and Wellsip `1 + 0.04 × bounded growth`. All three use the existing `25n/(25+n)` taper, rather than linear level growth. Slot, rarity, roll-quality and enhancement multipliers still apply. Mana and regeneration implicits use `1 + 0.04 × bounded growth`; non-resource implicits and damage are unchanged.
+
+Mana cost reduction preserves the first 20 percentage points, then approaches 40% with diminishing returns. A raw 50% bonus gives about 35.54% effective reduction; 75% gives about 38.72%. Shared derivation feeds spells, basic bolts, upkeep and tooltips. Individual affix numbers show the raw contribution; detailed stats explain the effective result.
+
+Existing recipes without `manaVersion: 1` reprice resource bonuses on validated save read, retaining rolls, IDs, enhancement and all non-resource bonuses. New and rebuilt recipes carry the marker. The matching client and Worker must ship together; local testing requires reloading the character. See [resource benchmark](resource-balance.md).
+
+
+## Offensive attribute budgets · local September 11 pass
+
+Strength and Intelligence rolls now use `(1 + 0.3 × g) × quality × enhancement × roll quality × slot/stone potency`, where `g = 25n / (25+n)` and `n = item level − 1`. Other affixes keep their existing budgets. The final positive value is rounded to a whole number. A middle level-35 Epic +5 head affix grants 9 Strength/Intelligence instead of 18; a dedicated spell-damage affix remains 19%.
+
+Sage/Lion pendant implicits use `0.5 + 0.15 × g` instead of raw item-power growth, retaining their authored base and rarity/enhancement/material factors. This prevents jewelry implicits bypassing the offensive attribute budget. The same policy applies to any offensive attribute focus implicit.
+
+Recipes carry `offenseVersion: 1`. Shared validated save reads update old Strength/Intelligence affixes and implicits once across every owned and ground-loot container, preserving IDs, roll quantiles, enhancement, locks and unrelated stats. Fresh generation, releveling, enchanting and enhancement consume the same current formulas. No character progress reset. See [measurements](offensive-attribute-balance-2026-09-11.md).
+
+
+## Wider quality rolls · local September 11 follow-up
+
+Ordinary continuous affixes now use a saved uniform quantile mapped to **0.65–1.35×**, previously 0.85–1.15×. The midpoint stays 1×; rounding and resistance caps still apply. At level 35, unenhanced Legendary gloves can roll +22–45% cast speed instead of +29–39%. Rarity counts, rarity multipliers, drop odds and discrete skill-rank/pierce quantiles are unchanged. Small whole-number rolls and capped resistances naturally have narrower effective variation.
+
+`item-roll-content.ts` owns this range for drops, charms and every service reconstruction. `rollVersion: 1` records repricing of old explicit affixes from their existing percentiles; it does not reroll names, affix types, IDs or quality. Low rolls decrease and high rolls increase. Implicit bonuses and base weapon/armor values are unchanged by this step; elemental enchantment projections rebuild from the new explicit roll. All save containers share the update.
+
+## Greater-roll identification
+
+A silver four-point star (✦) identifies a **top-10% saved variable-affix roll** (quantile ≥0.9). It appears after the displayed item name, before each qualifying stat in inspection/comparison tooltips, and in the inventory tile's upper-right corner. Ground nameplates reserve space for the star after their shortened name, even when that name is truncated; pickup notifications use the same marked display name. Charms use the same rule.
+
+This is a quality distinction across existing rarity tiers, not an extra stat multiplier. Fixed pierce and discrete skill-rank affixes are excluded because they do not use the continuous roll range. Whole-number rounding and resistance caps still apply, so a star describes the saved roll percentile, not a promise that every adjacent percentile has a different displayed value. Existing gear is recognized from its stored recipe without changing names, values or save formats; rerolling immediately updates the distinction.

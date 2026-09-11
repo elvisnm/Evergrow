@@ -177,3 +177,37 @@ test('sustained feedback outlives cast recovery and skill audio distinguishes im
   for(const [id,family] of [['earthshatter','earth'],['meteor','fire'],['iceNova','frost'],['arcLightning','lightning'],['siphon','spirit'],['volley','arrow'],['shieldBash','shield']] as const)
     assert.equal(skillSoundFamily({type:'cast',skill:id,x:0,y:0,angle:0}),family);
 });
+
+test('every meteor in a barrage deals full damage to each overlapping target',()=>{
+  const h=setup('cataclysm'),enemies=[h.target(100),h.target(105)];h.cast();
+  const impacts=h.sim.groundEffects.filter(e=>e.kind==='meteor');assert.equal(impacts.length,7);
+  const base=impacts[0].damage,totals=new Map<number,number>(),counts=new Map<number,number>();
+  for(let i=0;i<360;i++){
+    enemies.forEach((e,j)=>{e.x=100+j*5;e.y=0;e.stagger=60;e.knockbackX=e.knockbackY=0;});h.step();
+    for(const event of h.sim.drainEvents())if(event.type==='hit'&&!event.periodic){totals.set(event.targetId,(totals.get(event.targetId)??0)+event.value);counts.set(event.targetId,(counts.get(event.targetId)??0)+1);}
+  }
+  for(const e of enemies){assert.equal(counts.get(e.id),7);assert.equal(totals.get(e.id),7*Math.round(base));}
+});
+
+test('every projectile in a fan deals full damage through direct and explosion contacts',()=>{
+  const h=setup('fireball','fireball-fork'),enemies=[h.target(35),h.target(40)];h.cast();
+  const shots=h.sim.projectiles;assert.equal(shots.length,3);
+  const base=shots[0].damage,totals=new Map<number,number>(),counts=new Map<number,number>();
+  for(let i=0;i<120;i++){
+    enemies.forEach((e,j)=>{e.x=35+j*5;e.y=0;e.stagger=60;e.knockbackX=e.knockbackY=0;});h.step();
+    for(const event of h.sim.drainEvents())if(event.type==='hit'&&!event.periodic){totals.set(event.targetId,(totals.get(event.targetId)??0)+event.value);counts.set(event.targetId,(counts.get(event.targetId)??0)+1);}
+  }
+  for(const e of enemies){assert.equal(counts.get(e.id),3);assert.equal(totals.get(e.id),3*Math.round(base));}
+});
+
+test('Fireball uses its authored burn without merging the generic contact rate',()=>{
+  const h=setup('fireball'),enemy=h.target(35);h.cast();const damage=h.sim.projectiles[0].damage;
+  for(let i=0;i<100&&enemy.burnTime===0;i++)h.step();
+  assert.ok(enemy.burnTime>0);close(enemy.burnDps,damage*.12);
+});
+
+
+test('Shattered Sky spreads its five smaller impacts over wider ground',()=>{
+  const h=setup('meteor','meteor-shards');h.cast();const effects=h.sim.groundEffects;
+  assert.equal(effects.length,5);assert.ok(effects.some(e=>Math.hypot(e.x-100,e.y)>125));
+});

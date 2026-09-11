@@ -1,6 +1,6 @@
 import { executeDropItem } from './drop-item-command.ts';
 import { CHARM_SIZES, CHARM_FLAVORS } from './charm-content.ts';
-import { resolvePackLayout } from './inventory-grid.ts';
+import { PACK_CELLS, resolvePackLayout } from './inventory-grid.ts';
 import { xpForNextLevel } from './progression.ts';
 import { executeCharacterCommand } from './character-commands.ts';
 import './ui-kit.css';
@@ -15,8 +15,8 @@ import { PostFX } from './postfx.ts';
 import { GameShell } from './game-shell.ts';
 import { InventoryPanel } from './inventory-panel.ts';
 import { SkillTreePanel } from './skill-tree-panel.ts';
-import { generateItem } from './items.ts';
-import { equipItem, unequipItem, moveInventoryItem, allocateAttribute } from './inventory.ts';
+import { generateItem, deriveItem } from './items.ts';
+import { addInventoryItem, equipItem, unequipItem, moveInventoryItem, allocateAttribute } from './inventory.ts';
 import { allocateNode, SKILL_NODES, SKILL_TREE } from './skill-tree.ts';
 import { awardCharacterExperience, refreshCharacter, assignSkill } from './character.ts';
 import { Lifetime } from './lifetime.ts';
@@ -59,6 +59,24 @@ if(new URLSearchParams(location.search).has('charms')) {
   p.character.stash[1]=generateItem(8702,p.level,'charm','storm-tablet','epic');
   p.character.inventory[0]!.locked=true;
   p.character.inventoryLayout=resolvePackLayout(p.character);
+  // Stage a full physical pack alongside the charm collection, without overflow.
+  const gearKinds: ItemKind[] = ['weapon', 'chest', 'shield', 'head', 'weapon', 'boots', 'gloves', 'cloak', 'grimoire', 'orb', 'legs'];
+  const tiers = ['rare', 'magic', 'epic', 'common', 'legendary', 'magic'] as const;
+  for (let i = 0; i < 33; i++) {
+    addInventoryItem(p.character, generateItem(19000 + i * 831, p.level + i % 3,
+      gearKinds[i % gearKinds.length], undefined, tiers[i % tiers.length]));
+  }
+  // Jewelry occupies any single-cell gaps left between larger pieces.
+  for (let i = 0; i < PACK_CELLS; i++) {
+    if (!addInventoryItem(p.character, generateItem(48000 + i, p.level,
+      i % 2 ? 'amulet' : 'ring', undefined, tiers[i % tiers.length]))) break;
+  }
+}
+if (new URLSearchParams(location.search).has('greater')) {
+  const item = generateItem(99, 35, 'weapon', 'ember-staff', 'legendary');
+  item.recipe.rolls = item.recipe.rolls.map((_, i) => i === 0 || i === 2 ? .97 : .5);
+  p.character.inventory[6] = deriveItem(item);
+  p.character.inventoryLayout = resolvePackLayout(p.character);
 }
 const loadout = new URLSearchParams(location.search).get('loadout');
 const profile = loadout === 'bow' ? 'crescent-recurve' : loadout === 'staff' ? 'storm-staff'
