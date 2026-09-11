@@ -35,7 +35,6 @@
 .touch-mode .ui-window { max-height: calc(var(--touch-vh,100dvh) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px); }
 .touch-mode input, .touch-mode select { font-size: 16px; }
 .touch-mode .ui-button { min-height: 44px; }
-.touch-mode [data-tooltip]::after, .touch-mode [data-tooltip]::before { display: none; }
 .touch-mode .journey-tracker { max-width: 200px; }
 .touch-mode .service-panel { inset: max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) auto max(8px,env(safe-area-inset-left)); width: auto; }
 .touch-mode .service-body { overflow: auto; min-height: 0; }

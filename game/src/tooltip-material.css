@@ -1,6 +1,5 @@
 /* Shared smoked glass. Unsupported blur keeps a readable, opaque ink surface. */
-.ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card,
-[data-tooltip]:where(:not([data-tooltip=""]))::after {
+.ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card {
   border: 1px solid #abc7d226;
   border-radius: 0;
   background-color: #0d1821;
@@ -9,8 +8,7 @@
   box-shadow: 0 12px 32px #0007, 0 0 18px #a8d7e008, inset 0 0 18px #c5e7ef04;
 }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card,
-  [data-tooltip]:where(:not([data-tooltip=""]))::after {
+  .ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card {
     background-color: #0c1720bd;
     -webkit-backdrop-filter: blur(24px) saturate(1.65);
     backdrop-filter: blur(24px) saturate(1.65);
@@ -29,16 +27,14 @@
   backdrop-filter: none;
 }
 @media (prefers-reduced-transparency: reduce) {
-  .ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card,
-  [data-tooltip]:where(:not([data-tooltip=""]))::after {
+  .ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card {
     background-color: #0d1821;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 }
 @media (forced-colors: active) {
-  .ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card,
-  [data-tooltip]:where(:not([data-tooltip=""]))::after { border-color: CanvasText; background: Canvas; box-shadow: none; }
+  .ui-tooltip:not(.ui-item-tooltip-group), .ui-item-tooltip, .ui-item-hover-card { border-color: CanvasText; background: Canvas; box-shadow: none; }
 }
 
 /* Non-item tooltips use the same fading corner accent as equipment cards. */

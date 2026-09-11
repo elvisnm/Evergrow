@@ -1,5 +1,6 @@
 import { GAME_FONT_STACK } from './font.ts';
 import { TOOLTIP_MOTION } from './ui-tooltip-motion.ts';
+import { installUIHints } from './ui-hint.ts';
 
 /** Shared DOM/Canvas materials. Keep world lighting and post-processing separate. */
 export const UI_THEME = Object.freeze({
@@ -50,4 +51,6 @@ export function installUITheme(root: HTMLElement = document.documentElement): vo
   root.style.setProperty('--ui-tooltip-exit', `${TOOLTIP_MOTION.exit}ms`);
   root.style.setProperty('--ui-tooltip-lift', `${TOOLTIP_MOTION.lift}px`);
   installed.add(root);
+  // Hints attach to the live document only; isolated preview roots keep their own chrome.
+  if (root.ownerDocument?.documentElement === root) installUIHints();
 }
