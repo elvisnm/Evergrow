@@ -84,3 +84,13 @@ The damage audit also reports controlled low/mid/high-roll Legendary staff/chest
 ### Greater-roll inspection
 
 `/loot.html?greater&state=hovered` stages a Legendary staff with two greater rolls, an ordinary Epic item and an Epic charm with one greater roll. It shows the shared ground labels and bottom-corner tooltip. `/character.html?charms&greater` places the same staff in the existing inventory study; other generated gear retains its naturally rolled quality. Both modes use disposable recipes and runtime drawing, with no character-save access.
+
+### Polygon 3D style spike
+
+`/poly3d.html` (Characters workspace) rebuilds the player in `STARTER_OUTFIT`, the goblin and goblin
+chief, the closed and open chest and a forest tree as flat-shaded low-poly meshes, to decide whether
+the game moves to a polygon style. The top half is a slowly turning hero 3/4 angle; the bottom half
+renders the same row through the real game projection — orthographic, one world unit per CSS pixel —
+so the style is judged at the size the game actually draws. Colours come from the existing 2D
+palettes. It is the only importer of `three`, it renders nothing from the runtime renderer, and it
+is dev-only like every other review. See the spike note at the end of `AGENTS.md`.

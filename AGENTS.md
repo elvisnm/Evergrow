@@ -260,3 +260,24 @@ zone is checked before the trade zone, and the two are always different elements
 stored item's cell its slot index. The target cell is read from the grid geometry the same way
 `inventory-panel.ts`'s `dragLocation` does, rather than from per-cell markup the service grids
 do not have.
+
+## Polygon 3D style spike (2026-09-12)
+
+The "no new runtime dependencies" rule is lifted for `three` only, and only while the polygon
+direction is being decided. `three@0.186` sits in `dependencies` with `@types/three` in dev; the
+package ships no bundled types. Nothing in the game imports it — the only importer is
+`src/poly3d-review.ts`, a review fixture, and review pages are dev-only (`vite build` emits just
+`index.html`), so the shipped bundle is unchanged. If the direction is rejected, deleting
+`poly3d.html`, `src/poly3d-review.ts` and its catalog row removes the dependency's only reason to
+exist.
+
+The spike rebuilds assets the game already has — the player in `STARTER_OUTFIT`, goblin and goblin
+chief, the closed and open chest, and a forest tree — as flat-shaded low-poly geometry. It is not a
+converter: it re-cuts each silhouette in `BoxGeometry`/`IcosahedronGeometry`/`ConeGeometry` primitives
+and takes its colours from the real palettes in `equipment-art.ts`, `goblin-art.ts`, `chest-art.ts`,
+`tree-art.ts` and `SKIN_PALETTES`, so the comparison is about form, not about a new palette; only the
+ground plane, which the 2D art has no counterpart for, is invented. Geometry is modelled in
+the same units the 2D art uses, which lets the lower half of the page render the row through the real
+game projection — orthographic, one world unit per CSS pixel at zoom 1.25 — at true on-screen size.
+A hero 3/4 angle alone would flatter the style; the judgement has to be made at the size the game
+actually draws.

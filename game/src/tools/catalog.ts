@@ -24,6 +24,7 @@ export const TOOLS: readonly Tool[] = [
   {id:'services',group:'equipment',name:'Town services',path:'/services.html',description:'Inspect vendor stock, buyback and item improvements.'},
   {id:'services-phone',group:'equipment',name:'Services · phone',path:'/services-narrow.html',description:'The same enchanting interface at 390 pixels.'},
   {id:'loot',group:'equipment',name:'Ground loot',path:'/loot.html',description:'Dropped item art, rarity labels, coins and resource vials.'},
+  {id:'poly3d',group:'characters',name:'Polygon 3D spike',path:'/poly3d.html',description:'Today’s player, goblins, chest and tree rebuilt as flat-shaded low-poly, hero angle and real game projection.',tags:'three.js style low poly'},
   {id:'editor',group:'characters',name:'Appearance editor',path:'/character-editor.html',description:'Edit a staged character and armor colors.'},
   {id:'atelier',group:'characters',name:'Motion & equipment',path:'/atelier.html',description:'Weapon carrying, character proportions and animated poses.'},
   {id:'rig',group:'characters',name:'Rig directions',path:'/rig.html',description:'Inspect frozen poses across eight facings.'},
