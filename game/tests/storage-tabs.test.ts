@@ -5,6 +5,7 @@ import { quoteService, planService, type ServiceRequest } from '../src/commerce.
 import { executeService } from '../src/commerce-command.ts';
 import { storageTabCount, storageTabItems, STORAGE_TAB_PRICES, STASH_CAPACITY } from '../src/storage-content.ts';
 import { sortStorage } from '../src/inventory-tools.ts';
+import { addInventoryItem } from '../src/inventory.ts';
 import { decodeCharacterSave } from '../src/character-save.ts';
 import { Simulation } from '../src/simulation.ts';
 import { WORLD_GENERATION_VERSION } from '../src/world.ts';
@@ -150,4 +151,35 @@ test('bulk storage quotes reject a locked tab, duplicates and a selection that c
   const offer=quote(sheet,{type:'storeMany',items:[{...first},{...second}],tab:0});
   sheet.inventory[1]=generateItem(83002,1,'ring');
   assert.equal(planService(sheet,npc,1,offer).ok,false,'one replaced item rejects the whole batch');
+});
+
+test('bulk retrieve empties the chosen slots and refuses a batch the pack cannot hold',()=>{
+  const sheet=wealthy(); sheet.stash=Array(STASH_CAPACITY).fill(null);
+  sheet.inventory=Array(sheet.inventory.length).fill(null); sheet.inventoryLayout={};
+  for(let i=0;i<3;i++)sheet.stash[i*2]=generateItem(84000+i,1,'ring');
+  const items=[0,2,4].map(slot=>({slot,id:sheet.stash![slot]!.id,revision:sheet.stash![slot]!.recipe.revision}));
+  const ids=items.map(i=>i.id), taken=apply(sheet,{type:'retrieveMany',items});
+  assert.deepEqual([0,2,4].map(slot=>taken.stash![slot]),[null,null,null]);
+  assert.deepEqual(taken.inventory.filter(Boolean).map(item=>item!.id).sort(),[...ids].sort());
+  assert.ok(ids.every(id=>taken.inventoryLayout![id]!==undefined),'every retrieved item lands on the grid');
+  assert.equal(taken.commerce.revision,sheet.commerce.revision+1);
+  for(const bad of [[items[0],items[0]],[{...items[1],revision:99}],[{...items[0],slot:1}],[]])
+    assert.equal(quoteService(sheet,npc,1,{type:'retrieveMany',items:bad}).ok,false);
+
+  // One-item canPackItem cannot see a batch: the quote refuses before the panel offers the trade.
+  const full=wealthy(); full.stash=[...sheet.stash];
+  full.inventory=Array(full.inventory.length).fill(null); full.inventoryLayout={};
+  for(let seed=85000;addInventoryItem(full,generateItem(seed,1,'ring'));seed++);
+  const offer=quoteService(full,npc,1,{type:'retrieveMany',items});
+  assert.equal(offer.ok,false); assert.match(offer.ok?'':offer.message,/Bag full/);
+
+  const charms=wealthy(); charms.stash=Array(STASH_CAPACITY).fill(null);
+  charms.inventory=Array(charms.inventory.length).fill(null); charms.inventoryLayout={};
+  charms.stash[0]=generateItem(86000,1,'charm'); charms.stash[1]=generateItem(86001,1,'ring');
+  for(let seed=86100;addInventoryItem(charms,generateItem(seed,1,'charm'));seed++);
+  const mixed=[0,1].map(slot=>({slot,id:charms.stash![slot]!.id,revision:charms.stash![slot]!.recipe.revision}));
+  const cramped=quoteService(charms,npc,1,{type:'retrieveMany',items:mixed});
+  assert.equal(cramped.ok,false); assert.match(cramped.ok?'':cramped.message,/Charm grid full/);
+  // The ring still comes out on its own; only the charm region is short on room.
+  assert.ok(quote(charms,{type:'retrieveMany',items:[mixed[1]]}));
 });

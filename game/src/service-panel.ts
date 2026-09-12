@@ -9,7 +9,7 @@ import type { Player } from './model.ts';
 import type { Item, ItemKind, ItemTier, EquipmentSlot } from './character-types.ts';
 import { NPC_NAMES, NPC_COLORS, type TownNPC } from './npcs.ts';
 import { npcEmblem } from './npc-art.ts';
-import { RESPEC_GOLD_PER_POINT, respecPoints, attributeResetPoints, GAMBLE_KINDS, gambleOdds, premiumStockSlot, gamblePrice, STASH_CAPACITY, vendorStock, vendorStockLevel, quoteService, sourceItem, itemPrice, stockEpoch, type ServiceQuote, type ServiceRequest, type ItemSource, type SaleItem } from './commerce.ts';
+import { RESPEC_GOLD_PER_POINT, respecPoints, attributeResetPoints, GAMBLE_KINDS, gambleOdds, premiumStockSlot, gamblePrice, STASH_CAPACITY, vendorStock, vendorStockLevel, quoteService, sourceItem, itemPrice, stockEpoch, type ServiceQuote, type ServiceRequest, type ItemSource, type SaleItem, type StashItem } from './commerce.ts';
 import { improveItem, rerollPool, affixCategory, AFFIX_FOCUSES, type AffixFocus, type Improvement } from './item-improvement.ts';
 import { updateItemSlot } from './item-ui.ts';
 import { ItemTooltip } from './item-tooltip.ts';
@@ -35,6 +35,8 @@ export class ServicePanel {
   private selected: ServiceRequest | null = null;
   private quote: ServiceQuote | null = null;
   private sales = new Map<string, SaleItem>();
+  /** The chest's other direction: stash slots picked to come out in one trade. */
+  private takes = new Map<string, StashItem>();
   private goldFeedback: ServiceGoldFeedback;
   private saving = false;
   private gambleKind: ItemKind | null = null;
@@ -64,7 +66,7 @@ export class ServicePanel {
   }
   open(player: Player, npc: TownNPC): void {
     this.storageTab = 0; this.player = player; this.npc = npc; this.tab = npc.role === 'enchanter' ? 'improve' : 'shop';
-    this.sales.clear(); this.goldFeedback.stop(); this.revealed=null; this.gambleKind=null;
+    this.sales.clear(); this.takes.clear(); this.goldFeedback.stop(); this.revealed=null; this.gambleKind=null;
     this.operation = npc.role === 'blacksmith' ? 'enhance' : 'rarity'; this.selected = null; this.quote = null;
     this.element.hidden = false; this.render(); this.focus?.dispose();
     this.focus = trapDialogFocus(this.element, { initialFocus: this.element, restoreFocus: false });
@@ -110,6 +112,8 @@ export class ServicePanel {
     if(this.npc.role==='stash') return hasStorageTab(this.player.character,this.storageTab)?'store':null;
     return this.tab==='improve'?null:'sell';
   }
+  /** Nothing guards a retrieval: every item in the open tab may come out. */
+  private takeEligible(): Item[] { return storageTabItems(this.player.character,this.storageTab).filter((item): item is Item => !!item); }
   private bulkEligible(): Item[] {
     return this.bulkTarget==='store'?bulkStorableItems(this.player.character,this.player.level,this.includeActiveCharms)
       :bulkSaleItems(this.player.character,this.player.level,this.includeActiveCharms);
@@ -198,7 +202,7 @@ export class ServicePanel {
     this.element.innerHTML = `${this.headerMarkup()}
       <div class="service-body"><section class="service-offer service-storage-pane ui-scroll-area">
         <nav class="storage-tabs" aria-label="Storage tabs">${Array.from({length:MAX_STORAGE_TABS},(_,tab)=>`<button type="button" class="ui-button ui-button--quiet" data-storage-tab="${tab}" aria-pressed="${this.storageTab===tab}" ${tab>count?'disabled':''} aria-label="${tab<count?'Open':'Unlock'} storage tab ${tab+1}">${tab>=count?ITEM_LOCK_ICON:''}<span>Tab ${tab+1}</span></button>`).join('')}</nav>
-        ${owned?`<div class="service-storage-toolbar">${this.sortMarkup('storage')}<span>${storageTabItems(sheet,this.storageTab).filter(Boolean).length} / ${STASH_CAPACITY}</span></div><div class="ui-item-grid-scroll"><div class="service-storage inventory-pack"></div></div>`:
+        ${owned?`<div class="service-storage-toolbar">${this.sortMarkup('storage')}<span>${storageTabItems(sheet,this.storageTab).filter(Boolean).length} / ${STASH_CAPACITY}</span></div>${this.rarityControls('take')}<div class="ui-item-grid-scroll"><div class="service-storage inventory-pack"></div></div>`:
           `<div class="storage-unlock"><span class="storage-unlock-icon">${ITEM_LOCK_ICON}</span><h3>Storage tab ${this.storageTab+1}</h3><p>${STASH_CAPACITY} more items</p><strong>${nextStorageTabPrice(sheet)?.toLocaleString()} <small>gold</small></strong></div>`}
       </section><section class="service-bag ui-scroll-area"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}${owned?this.rarityControls():''}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></div>
       <footer class="ui-window-footer"><span class="service-message" role="status"></span><button class="ui-button ui-button--primary" data-confirm disabled>Select an item</button></footer>`;
@@ -216,9 +220,19 @@ export class ServicePanel {
     this.syncMultiSelect(); this.syncRarities();
     for (const cell of this.element.querySelectorAll<HTMLElement>('[data-item]')) {
       const entry = this.resolve(cell.dataset.item!);
-      const bulk = !!entry && !!entry.source && 'bag' in entry.source;
-      if(bulk) cell.setAttribute('aria-pressed',String(this.sales.has(entry.item.id)));
-      cell.classList.toggle('is-selected',Boolean(entry && (bulk&&this.sales.has(entry.item.id) || JSON.stringify(entry.request)===JSON.stringify(this.selected))));
+      const selection = !entry ? null : entry.request.type==='retrieve' ? this.takes : this.sales;
+      const selected = !!entry && !!selection && selection.has(entry.item.id);
+      cell.setAttribute('aria-pressed',String(selected));
+      cell.classList.toggle('is-selected',selected);
+    }
+    if (this.takes.size) {
+      const items=[...this.takes.values()].sort((a,b)=>a.slot-b.slot);
+      const bulk=quoteService(this.player.character,this.npc,this.player.level,{type:'retrieveMany',items});
+      button.textContent=`Take ${items.length} ${items.length===1?'item':'items'}`;
+      if(!bulk.ok){message.textContent=bulk.message;return;}
+      this.quote=bulk.quote; button.disabled=false;
+      message.textContent=`${items.length} ${items.length===1?'item':'items'} selected`;
+      return;
     }
     if (this.sales.size) {
       const items=[...this.sales.values()].sort((a,b)=>a.bag-b.bag);
@@ -238,12 +252,6 @@ export class ServicePanel {
       if(button.disabled)message.textContent='Not enough gold.';
       return;
     }
-    if (!result.item || (this.selected.type!=='store' && this.selected.type!=='retrieve')) return;
-    this.quote=result.quote;
-    const storing=this.selected.type==='store';
-    const full=storing?storageTabItems(this.player.character,this.storageTab).filter(Boolean).length>=STASH_CAPACITY:!canPackItem(this.player.character,result.item);
-    button.textContent=storing?`Store in tab ${this.storageTab+1}`:'Take item'; button.disabled=full;
-    message.textContent=full?storing?'Storage tab full.':packSpaceProblem(this.player.character,result.item):itemDisplayName(result.item);
   }
   private renderSpecial():void {
     this.goldFeedback.stop(); this.tooltip.hide(); this.element.classList.remove('is-selling');
@@ -281,12 +289,13 @@ export class ServicePanel {
     button.disabled=full||goldBalance(this.player.character)<result.quote.price;
     if(button.disabled)this.element.querySelector('.service-message')!.textContent=full?packSpaceProblem(this.player.character,result.item):'Not enough gold.';
   }
-  private rarityControls(): string {
+  private rarityControls(kind: 'bulk' | 'take' = 'bulk'): string {
+    const eligible=kind==='take'?this.takeEligible():this.bulkEligible(), selection=kind==='take'?this.takes:this.sales;
     return `<div class="service-rarities" aria-label="Select items by rarity">${(['common','magic','rare','epic','legendary'] as ItemTier[]).map(tier=>{
-      const items=this.bulkEligible().filter(item=>item.tier===tier);
-      const selected=items.length>0&&items.every(item=>this.sales.has(item.id));
-      return `<button type="button" data-bulk-tier="${tier}" aria-pressed="${selected}" ${items.length?'':'disabled'} style="--rarity-color:${TIER_COLORS[tier]}">${TIER_NAMES[tier]} <small>${items.length}</small></button>`;
-    }).join('')}<label class="service-include-charms"><input type="checkbox" data-include-charms ${this.includeActiveCharms?'checked':''}> Include active charms</label></div>`;
+      const items=eligible.filter(item=>item.tier===tier);
+      const selected=items.length>0&&items.every(item=>selection.has(item.id));
+      return `<button type="button" data-${kind}-tier="${tier}" aria-pressed="${selected}" ${items.length?'':'disabled'} style="--rarity-color:${TIER_COLORS[tier]}">${TIER_NAMES[tier]} <small>${items.length}</small></button>`;
+    }).join('')}${kind==='take'?'':`<label class="service-include-charms"><input type="checkbox" data-include-charms ${this.includeActiveCharms?'checked':''}> Include active charms</label>`}</div>`;
   }
   /** Mirror the carried pack; empty space and overflow retain their actual positions. */
   private renderInventoryPack(): void {
@@ -367,7 +376,7 @@ export class ServicePanel {
     if (button.dataset.storageTab !== undefined) {
       const tab=Number(button.dataset.storageTab);
       if (!Number.isInteger(tab)||tab<0||tab>=MAX_STORAGE_TABS||tab>storageTabCount(this.player.character)) return;
-      this.storageTab=tab; this.selected=null; this.quote=null; this.sales.clear(); this.render();
+      this.storageTab=tab; this.selected=null; this.quote=null; this.sales.clear(); this.takes.clear(); this.render();
       this.element.querySelector<HTMLElement>(`[data-storage-tab="${tab}"]`)?.focus({preventScroll:true});
       return;
     }
@@ -375,7 +384,7 @@ export class ServicePanel {
       const target = button.dataset.sortPack;
       this.tooltip.hide();
       if (this.selected?.type !== 'gamble') this.selected = null;
-      this.quote = null; this.sales.clear();
+      this.quote = null; this.sales.clear(); this.takes.clear();
       this.actions.sort(target,this.storageTab);
       this.render();
       this.element.querySelector<HTMLElement>(`[data-sort-pack="${target}"]`)?.focus({preventScroll:true});
@@ -389,6 +398,18 @@ export class ServicePanel {
     }
     if(button.hasAttribute('data-clear-sales')) { this.sales.clear(); this.render(); return; }
     if(button.hasAttribute('data-include-charms')) { this.includeActiveCharms=(button as unknown as HTMLInputElement).checked; this.sales.clear(); this.render(); return; }
+    if(button.dataset.takeTier) {
+      // storageTabItems is tab-relative; the stash and the quote are absolute.
+      const start=this.storageTab*STASH_CAPACITY;
+      const items=storageTabItems(this.player.character,this.storageTab).flatMap((item,slot)=>item&&item.tier===button.dataset.takeTier?[{item,slot:start+slot}]:[]);
+      const remove=items.every(({item})=>this.takes.has(item.id));
+      if(items.length){this.sales.clear();this.selected=null;}
+      for(const {item,slot} of items) {
+        if(remove)this.takes.delete(item.id);
+        else this.takes.set(item.id,{slot,id:item.id,revision:item.recipe.revision});
+      }
+      this.render(); return;
+    }
     if(button.dataset.bulkTier) {
       const eligible=new Set(this.bulkEligible().map(i=>i.id));
       const items=this.player.character.inventory.flatMap((item,bag)=>item&&eligible.has(item.id)&&item.tier===button.dataset.bulkTier?[{item,bag}]:[]);
@@ -406,8 +427,17 @@ export class ServicePanel {
       if(this.sellable && bagCell && value.item.locked){this.element.querySelector('.service-message')!.textContent='Unlock this item in your inventory before selling it.';return;}
       // Shift-click still sells one item outright, but never past a selection it would ignore.
       if(this.sellable && bagCell && e.shiftKey && this.tab !== 'sell' && this.sales.size === 0) { this.selected = value.request; this.renderDetail(); this.confirm(); return; }
+      if(value.request.type==='retrieve') {
+        const slot=value.request.slot;
+        this.sales.clear(); this.selected=null;
+        if(this.takes.has(value.item.id)) this.takes.delete(value.item.id);
+        else this.takes.set(value.item.id,{slot,id:value.item.id,revision:value.item.recipe.revision});
+        this.renderDetail(); this.syncRarities();
+        if(!button.isConnected)this.element.querySelector<HTMLElement>(`.service-storage [data-item="stash:${slot}"]`)?.focus({preventScroll:true});
+        return;
+      }
       if(this.bulkTarget && bagCell && value.source && 'bag' in value.source) {
-        if(this.bulkTarget==='store') this.selected=null;
+        if(this.bulkTarget==='store') { this.selected=null; this.takes.clear(); }
         if(this.sales.has(value.item.id)) this.sales.delete(value.item.id);
         else this.sales.set(value.item.id,{bag:value.source.bag,id:value.item.id,revision:value.item.recipe.revision});
         this.renderDetail(); this.syncRarities();
@@ -469,14 +499,17 @@ export class ServicePanel {
     }
   }
   private syncRarities(): void {
-    for(const button of this.element.querySelectorAll<HTMLButtonElement>('[data-bulk-tier]')) {
-      const items=this.bulkEligible().filter(item=>item.tier===button.dataset.bulkTier);
-      button.setAttribute('aria-pressed',String(items.length>0&&items.every(item=>this.sales.has(item!.id))));
+    for(const kind of ['bulk','take'] as const) {
+      const eligible=kind==='take'?this.takeEligible():this.bulkEligible(), selection=kind==='take'?this.takes:this.sales;
+      for(const button of this.element.querySelectorAll<HTMLButtonElement>(`[data-${kind}-tier]`)) {
+        const items=eligible.filter(item=>item.tier===button.dataset[`${kind}Tier`]);
+        button.setAttribute('aria-pressed',String(items.length>0&&items.every(item=>selection.has(item.id))));
+      }
     }
   }
   /** The per-cell check earns its place once a selection is plural; one selected item is
    * already obvious from its outline, and the badge only hides the art underneath. */
-  private syncMultiSelect(): void { this.element.classList.toggle('is-multi-select', this.sales.size >= 2); }
+  private syncMultiSelect(): void { this.element.classList.toggle('is-multi-select', this.sales.size >= 2 || this.takes.size >= 2); }
   private renderSales(detail:HTMLElement, button:HTMLButtonElement, message:HTMLElement): void {
     const items=[...this.sales.values()].sort((a,b)=>a.bag-b.bag);
     this.syncMultiSelect();
@@ -515,7 +548,7 @@ export class ServicePanel {
     this.tooltip.hide();
     if (result.ok) {
       if(gamble)this.revealed=this.player.character.inventory.find(i=>i?.id===revealedId)??null;
-      this.sales.clear(); const keep = gamble || this.selected?.type === 'improve'; if (!keep) this.selected = null;
+      this.sales.clear(); this.takes.clear(); const keep = gamble || this.selected?.type === 'improve'; if (!keep) this.selected = null;
       if (gamble) {
         // Keep the choices and action button mounted for rapid repeat purchases.
         this.renderInventoryPack();

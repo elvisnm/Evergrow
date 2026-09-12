@@ -201,3 +201,10 @@ that are deliberate. Locks guard against selling, not against storing, so `bulkS
 stricter than the single store that already ignores them. And the tab's free space is checked in `quoteService`, not only in
 `planService`, because the panel labels its button from the quote; without it the button would offer a store that fails on
 confirm. Placement in `planService` walks a cursor forward past the slots the same batch just filled.
+
+Taking items out is the mirror image: `retrieveMany` carries absolute stash slots, and a `takes` map holds the chest side of the
+selection. The two directions are mutually exclusive -- one footer button, so selecting on either side clears the other -- which
+is why the single `store`/`retrieve` arm of `storageDetail` is gone. Capacity again belongs to `quoteService`, but a pack is a
+tetris grid, so `canPackItem` cannot answer for a batch: `packBatchProblem` probes the real `addInventoryItem` on a cloned sheet
+so the quote and the plan cannot disagree about the charm region, overflow or footprints. Never bound a retrieval to one tab --
+the panel clears the selection on a tab switch and `stash.length` is the honest range.

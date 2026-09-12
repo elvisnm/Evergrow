@@ -6,7 +6,7 @@ import { servicePolicy } from './settlement-services.ts';
 import { itemMaterialValue, itemMaterialService } from './item-materials.ts';
 import type { CharacterSheet, Item, ItemTier, ItemKind, EquipmentSlot } from './character-types.ts';
 import { generateItem, randomSource, itemDisplayName, itemAffixPool } from './items.ts';
-import { addInventoryItem } from './inventory.ts';
+import { addInventoryItem, packBatchProblem } from './inventory.ts';
 import { creditGold, spendGold, goldBalance } from './wallet.ts';
 import { hashService, vendorLevel, type TownNPC } from './npcs.ts';
 import { nextRarityTier, improveItem, improvementProblem, ITEM_TIERS, AFFIX_FOCUSES, rerollPool, affixCategory, type AffixFocus, type Improvement } from './item-improvement.ts';
@@ -57,6 +57,7 @@ export function vendorStock(sheet: CharacterSheet, npc: TownNPC, level: number):
 export const premiumStockSlot=(npc:TownNPC,slot:number)=>{const p=servicePolicy(npc);return slot>=(npc.role==='jeweler'?p.jewelerStock:p.smithStock)-p.premium;};
 export type ItemSource = { bag: number } | { equipped: EquipmentSlot };
 export interface SaleItem { bag: number; id: string; revision: number; }
+export interface StashItem { slot: number; id: string; revision: number; }
 export const GAMBLE_KINDS: readonly ItemKind[] = ['weapon','shield','head','chest','gloves','legs','boots','cloak','ring','amulet','grimoire','orb'];
 export const gambleOdds=(npc:TownNPC)=>servicePolicy(npc).gambleOdds;
 export const gamblePrice=(npc:TownNPC,level:number,kind:ItemKind)=>Math.ceil(budget(vendorLevel(npc,level))*4*servicePolicy(npc).gamblePrice*(kind==='ring'||kind==='amulet'?1.5:1));
@@ -72,6 +73,7 @@ export const attributeResetPoints = (sheet: CharacterSheet) => Object.values(she
 export type ServiceRequest = {type:'resetAttributes'} | {type:'respec'} | {type:'gamble';kind:ItemKind} | {type:'store';bag:number;tab?:number} | {type:'unlockStorage';tab:number} | {type:'retrieve';slot:number} | { type: 'buy'; slot: number } | { type: 'sell'; source: ItemSource }
   | { type: 'sellMany'; items: SaleItem[]; includeActiveCharms?: boolean }
 | { type: 'storeMany'; items: SaleItem[]; tab?: number; includeActiveCharms?: boolean }
+| { type: 'retrieveMany'; items: StashItem[] }
   | { type: 'buyback'; id: string } | { type: 'improve'; source: ItemSource; operation: Improvement; affix?: number; focus?:AffixFocus };
 export interface ServiceQuote { npcId: string; revision: number; epoch: number; itemId: string; itemRevision: number; price: number; request: ServiceRequest; }
 export type QuoteResult = { ok: false; message: string } | { ok: true; quote: ServiceQuote; item: Item | null };
@@ -134,6 +136,20 @@ export function quoteService(sheet: CharacterSheet, npc: TownNPC, level: number,
     const start=(request.tab??0)*STASH_CAPACITY,stash=sheet.stash??[];
     const free=Array.from({length:STASH_CAPACITY},(_,i)=>stash[start+i]??null).filter(slot=>!slot).length;
     if(request.items.length>free)return fail(free?`Only ${free} slots are free in this tab.`:'Storage tab full.');
+  } else if(request.type==='retrieveMany') {
+    if(npc.role!=='stash')return fail('Visit a storage chest.');
+    const stash=sheet.stash??[];
+    if(!Array.isArray(request.items)||!request.items.length||request.items.length>stash.length)return fail('Select items to take.');
+    const taken=new Set<number>(),items:Item[]=[];
+    for(const selected of request.items) {
+      if(!selected||!Number.isInteger(selected.slot)||selected.slot<0||selected.slot>=stash.length||taken.has(selected.slot))return fail('Invalid item selection.');
+      const stored=stash[selected.slot];
+      if(!stored||stored.id!==selected.id||stored.recipe.revision!==selected.revision)return fail('The selection changed. Select the items again.');
+      taken.add(selected.slot);items.push(stored);item??=stored;
+    }
+    // The panel labels its button from this quote, so the whole batch has to fit before it offers the trade.
+    const problem=packBatchProblem(sheet,items);
+    if(problem)return fail(problem);
   } else if(npc.role==='stash')return fail('This service is not available here.');
   else if (request.type === 'sellMany') {
     if (!Array.isArray(request.items) || !request.items.length || request.items.length > sheet.inventory.length) return fail('Select items to sell.');
@@ -169,7 +185,14 @@ export function quoteService(sheet: CharacterSheet, npc: TownNPC, level: number,
   if(request.type==='sell'&&item.locked)return fail('Unlock this item before selling it.');
   if (!Number.isSafeInteger(price) || price < 0 || sheet.commerce.revision >= Number.MAX_SAFE_INTEGER || sheet.commerce.operations >= Number.MAX_SAFE_INTEGER) return fail('This transaction exceeds the supported limit.');
   return { ok: true, item, quote: { npcId: npc.id, revision: sheet.commerce.revision, epoch: stockEpoch(level), itemId: item.id,
-    itemRevision: item.recipe.revision, price, request: request.type === 'sellMany' || request.type === 'storeMany' ? { ...request, items: request.items.map(i => ({ ...i })) } : { ...request } } };
+    itemRevision: item.recipe.revision, price, request: copyRequest(request) } };
+}
+/** A bulk quote owns its selection: `planService` compares the two, so a caller mutating the array
+ *  it passed in must not make the offer drift. */
+function copyRequest(request: ServiceRequest): ServiceRequest {
+  if (request.type === 'sellMany' || request.type === 'storeMany') return { ...request, items: request.items.map(i => ({ ...i })) };
+  if (request.type === 'retrieveMany') return { ...request, items: request.items.map(i => ({ ...i })) };
+  return { ...request };
 }
 export type TradePlan = { ok: false; message: string } | { ok: true; character: CharacterSheet; message: string; item: Item | null };
 /** No live mutation: the caller persists this complete sheet before publishing it. */
@@ -216,6 +239,15 @@ export function planService(sheet: CharacterSheet, npc: TownNPC, level: number, 
     }
     normalizePackLayout(character);
     return {ok:true,character,message:`Stored ${request.items.length} items.`,item};
+  }
+  if(request.type==='retrieveMany') {
+    for(const selected of request.items) {
+      const stored=character.stash![selected.slot]!;
+      if(!addInventoryItem(character,stored))return {ok:false,message:packSpaceProblem(character,stored)};
+      character.stash![selected.slot]=null;
+    }
+    normalizePackLayout(character);
+    return {ok:true,character,message:`Retrieved ${request.items.length} items.`,item};
   }
   if(request.type==='store'||request.type==='retrieve') {
     if(request.type==='store'){

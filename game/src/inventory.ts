@@ -1,4 +1,4 @@
-import { INVENTORY_CELLS, resolvePackLayout, normalizePackLayout, packOccupancy, findPackSpace, footprintCells, type PackLayout } from './inventory-grid.ts';
+import { INVENTORY_CELLS, resolvePackLayout, normalizePackLayout, packOccupancy, findPackSpace, footprintCells, packSpaceProblem, type PackLayout } from './inventory-grid.ts';
 import type { ActionResult, Attribute, CharacterSheet, EquipmentSlot, Item } from './character-types.ts';
 import { EQUIPMENT_SLOTS } from './items.ts';
 
@@ -122,6 +122,13 @@ export function addInventoryItem(sheet: CharacterSheet, item: Item): boolean {
   return true;
 }
 
+/** `canPackItem` answers for one item; a batch needs every placement in turn, because each one
+ *  changes the grid. Probing with the real placement keeps the quote and the plan in agreement. */
+export function packBatchProblem(sheet: CharacterSheet, items: Item[]): string | null {
+  const probe: CharacterSheet = { ...sheet, inventory: [...sheet.inventory], inventoryLayout: { ...resolvePackLayout(sheet) }, recentItems: [...(sheet.recentItems ?? [])] };
+  for (const item of items) if (!addInventoryItem(probe, item)) return packSpaceProblem(probe, item);
+  return null;
+}
 export function allocateAttribute(sheet: CharacterSheet, attribute: Attribute): ActionResult {
   if (!['strength', 'dexterity', 'intelligence', 'vitality'].includes(attribute)) return fail('Unknown attribute.');
   if (!Number.isSafeInteger(sheet.statPoints) || sheet.statPoints < 1) return fail('No attribute points available.');
