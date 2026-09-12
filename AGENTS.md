@@ -220,3 +220,43 @@ in the cloud save path, both resolved by taking upstream's rewrite and re-applyi
 - `save-hub.ts` -- upstream added `statusForSlot`; the fork's `state` reports "Shared with the dev server" and routes characters
   through `SharedSaveClient`. Kept both. Upstream's plain `'Local'` status was deliberately not taken, because on this fork a
   local save may live on the container rather than in the browser, and the hall should say which.
+
+## Dragging a trade in the service panel (2026-09-12)
+
+Drag is a shortcut over the click-then-button flow, never a second code path for the trade itself.
+A dragged cell's drop target is derived from `serviceDropZone(role, tab, source)` in `commerce.ts`, a
+pure map that answers with the one zone that cell may land on: the chest stores from the bag and
+retrieves from the stash, the Sell tab drops onto the offer pane, and stock or buyback drops into
+the bag. Selling is tied to `tab === 'sell'` explicitly rather than inferred from the sale list --
+the list also renders on the shop tab once a selection exists, and the shop tab deliberately has no
+drop zone. The commit in `ServicePanel.drop` re-quotes through `quoteService` and adds the same gold
+and `canPackItem` guards the footer button applies, plus the free-slot count for a store, so a drop
+that would fail is refused into `.service-message` instead of attempted. Only a single item may be dragged: with two or more selected the
+gesture never starts, which is the same predicate `syncMultiSelect` already uses.
+
+One pointer path serves mouse and touch. The gesture arms after 10px of mouse movement, or after a
+650ms still hold with a finger -- a finger that moves first is scrolling the pack, so the pack keeps
+its scroll. That reuses the hold duration and 10px slop of `armor-tint-prompt.ts`; the panel has no
+touch tooltip to compete with, because `ServicePanel.hover` returns early in `touch-mode`. Arming
+takes pointer capture and a non-passive `touchmove` cancels the pan the browser would otherwise
+start, and a completed drag sets `suppressClick` so the release cannot also toggle a selection.
+The dragged item rides the pointer as a `.service-drag-ghost` cloned from the source cell -- its own
+markup at its own measured size, so nothing resizes mid-gesture -- because HTML5 drag images are
+unavailable on this path. Nothing else lights up: the container being dragged over is deliberately
+left unhighlighted, so the ghost alone says what is in hand.
+
+Where an item lands is the cell it was dropped on. `dropCell` reads that cell from the grid geometry
+for both directions; an arriving item is then moved there by `place` only when the cell is free,
+otherwise it keeps the first free cell `addInventoryItem` or the store already gave it. A same-
+container rearrange still swaps with an occupant, matching `planInventoryMove` and the character
+panel. A dragged sale asks first through the `.service-confirm` overlay, since one gesture would
+otherwise turn an item into gold; every other drop commits directly, because each is reversible
+from the same panel.
+
+Dropping back into the container an item already lives in rearranges it instead of trading: the home
+zone is checked before the trade zone, and the two are always different elements. The bag reuses
+`moveInventoryItem` through the existing `moveItem` command; the chest gets `moveStorageItem` in
+`inventory-tools.ts`, a swap between two slots of one unlocked tab, since `storageGridLayout` makes a
+stored item's cell its slot index. The target cell is read from the grid geometry the same way
+`inventory-panel.ts`'s `dragLocation` does, rather than from per-cell markup the service grids
+do not have.

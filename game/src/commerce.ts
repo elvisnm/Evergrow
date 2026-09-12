@@ -75,6 +75,17 @@ export type ServiceRequest = {type:'resetAttributes'} | {type:'respec'} | {type:
 | { type: 'storeMany'; items: SaleItem[]; tab?: number; includeActiveCharms?: boolean }
 | { type: 'retrieveMany'; items: StashItem[] }
   | { type: 'buyback'; id: string } | { type: 'improve'; source: ItemSource; operation: Improvement; affix?: number; focus?:AffixFocus };
+/** The one place a dragged cell may be dropped, so a drag can only ever commit the trade its
+ * click already means. Sales are offered on the dedicated Sell tab alone: the shop tab keeps its
+ * bag clicks for building a selection and has no drop zone. */
+export type ServiceDropZone = 'inventory' | 'storage' | 'sales';
+export function serviceDropZone(role: TownNPC['role'], tab: string, source: string): ServiceDropZone | null {
+  if (role === 'stash') return source === 'bag' ? 'storage' : source === 'stash' ? 'inventory' : null;
+  if (source === 'bag') return tab === 'sell' ? 'sales' : null;
+  if (source === 'stock') return tab === 'shop' && (role === 'blacksmith' || role === 'jeweler') ? 'inventory' : null;
+  if (source === 'buyback') return tab === 'buyback' ? 'inventory' : null;
+  return null;
+}
 export interface ServiceQuote { npcId: string; revision: number; epoch: number; itemId: string; itemRevision: number; price: number; request: ServiceRequest; }
 export type QuoteResult = { ok: false; message: string } | { ok: true; quote: ServiceQuote; item: Item | null };
 export function sourceItem(sheet: CharacterSheet, source: ItemSource): Item | null {

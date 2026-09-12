@@ -52,6 +52,17 @@ export function sortInventory(sheet: CharacterSheet, mode: InventorySort): Actio
 }
 
 /** Sort storage independently, keeping exact item records and its full capacity. */
+/** A stored item's cell is its slot, so rearranging a tab is a swap between two of its slots. */
+export function moveStorageItem(sheet: CharacterSheet, from: number, to: number): ActionResult {
+  const stash = sheet.stash;
+  if (!stash || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= stash.length || to >= stash.length) return { ok: false, message: 'Invalid storage slot.' };
+  const tab = Math.floor(from / STASH_CAPACITY);
+  if (tab !== Math.floor(to / STASH_CAPACITY) || !hasStorageTab(sheet, tab)) return { ok: false, message: 'Move items within one storage tab.' };
+  if (!stash[from] || from === to) return { ok: true };
+  sheet.stash = [...stash];
+  [sheet.stash[from], sheet.stash[to]] = [sheet.stash[to], sheet.stash[from]];
+  return { ok: true };
+}
 export function sortStorage(sheet: CharacterSheet, tab = 0): ActionResult {
   if (!hasStorageTab(sheet,tab)) return {ok:false,message:'This storage tab is locked.'};
   if (!sheet.stash) return { ok: true };
