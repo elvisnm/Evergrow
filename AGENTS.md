@@ -208,3 +208,15 @@ is why the single `store`/`retrieve` arm of `storageDetail` is gone. Capacity ag
 tetris grid, so `canPackItem` cannot answer for a batch: `packBatchProblem` probes the real `addInventoryItem` on a cloned sheet
 so the quote and the plan cannot disagree about the charm region, overflow or footprints. Never bound a retrieval to one tab --
 the panel clears the selection on a tab switch and `stash.length` is the honest range.
+
+## Upstream sync 0.3.15 (2026-09-12)
+
+Merged four upstream commits (Legendary reward rates, cloud deletion recovery, the 0.3.15 release notes). Two conflicts, both
+in the cloud save path, both resolved by taking upstream's rewrite and re-applying one fork decision on top:
+
+- `cloud-client.ts` -- upstream rewrote `write`/`remove` around per-slot failure tracking and deleted `commit`. Took their file
+  whole, then put `randomId()` back in place of `crypto.randomUUID()`. That substitution is not a style preference: the LAN dev
+  server runs over plain http, where `crypto.randomUUID` is undefined, and a save that throws there loses a character.
+- `save-hub.ts` -- upstream added `statusForSlot`; the fork's `state` reports "Shared with the dev server" and routes characters
+  through `SharedSaveClient`. Kept both. Upstream's plain `'Local'` status was deliberately not taken, because on this fork a
+  local save may live on the container rather than in the browser, and the hall should say which.

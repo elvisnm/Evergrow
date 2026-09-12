@@ -24,6 +24,7 @@ export class SaveHub implements CharacterRepositoryPort, ExplorationPersistence 
   onChange = (_state: SaveSourceUI) => {};
   chart: (record: CharacterSave) => DecodedExploration | undefined = () => undefined;
   get state(): SaveSourceUI { return { supported: this.supported, mode: this.mode, signedIn: !!this.cloud, status: this.mode === 'local' ? (this.shared ? 'Shared with the dev server' : 'On this device') : this.cloud?.status ?? this.status, message: this.mode === 'cloud' ? this.cloud?.message : undefined }; }
+  statusForSlot(index: number) { return this.mode === 'cloud' && this.cloud ? this.cloud.statusForSlot(index) : this.state; }
   /** Characters may live on the dev server; explored maps always stay in this browser. */
   private get characters() { return this.mode === 'local' ? this.shared ?? this.local : this.repository; }
   private get files() { return this.shared ?? this.local; }
