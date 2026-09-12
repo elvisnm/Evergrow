@@ -9,7 +9,7 @@ import type { Player } from './model.ts';
 import type { Item, ItemKind, ItemTier, EquipmentSlot } from './character-types.ts';
 import { NPC_NAMES, NPC_COLORS, type TownNPC } from './npcs.ts';
 import { npcEmblem } from './npc-art.ts';
-import { RESPEC_GOLD_PER_POINT, respecPoints, attributeResetPoints, GAMBLE_KINDS, gambleOdds, premiumStockSlot, gamblePrice, STASH_CAPACITY, vendorStock, vendorStockLevel, quoteService, sourceItem, itemPrice, stockEpoch, type ServiceQuote, type ServiceRequest, type ItemSource, type SaleItem, type StashItem } from './commerce.ts';
+import { RESPEC_GOLD_PER_POINT, respecPoints, attributeResetPoints, GAMBLE_KINDS, gambleOdds, premiumStockSlot, gamblePrice, STASH_CAPACITY, vendorStock, vendorStockLevel, quoteService, serviceDropZone, sourceItem, itemPrice, stockEpoch, type ServiceQuote, type ServiceRequest, type ItemSource, type SaleItem, type StashItem, type ServiceDropZone } from './commerce.ts';
 import { improveItem, rerollPool, affixCategory, AFFIX_FOCUSES, type AffixFocus, type Improvement } from './item-improvement.ts';
 import { updateItemSlot } from './item-ui.ts';
 import { ItemTooltip } from './item-tooltip.ts';
@@ -41,6 +41,10 @@ export class ServicePanel {
   private saving = false;
   private gambleKind: ItemKind | null = null;
   private revealed:Item|null=null;
+  /** One pointer drag serves mouse and touch alike; `armed` flips once the gesture has proved
+   * itself — 10px of movement with a mouse, a 650ms still hold with a finger. */
+  private drag: { key: string; zone: ServiceDropZone; id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> | null; armed: boolean } | null = null;
+  private suppressClick = false;
   private abort = new AbortController();
   private focus: { dispose(): void } | null = null;
   private actions: { close(): void; sort(target: 'storage' | 'inventory', tab?: number): void; trade(quote: ServiceQuote): Promise<{ ok: boolean; message: string }> };
@@ -63,6 +67,15 @@ export class ServicePanel {
     this.element.addEventListener('pointerout', e => { if (!(e.relatedTarget instanceof Node) || !(e.target as HTMLElement).closest('[data-item]')?.contains(e.relatedTarget)) this.tooltip.hide(); }, { signal: this.abort.signal });
     this.element.addEventListener('focusout', () => this.tooltip.hide(), { signal: this.abort.signal });
     this.element.addEventListener('scroll', () => this.tooltip.hide(), { signal: this.abort.signal, capture: true });
+    this.element.addEventListener('pointerdown', e => this.dragStart(e), { signal: this.abort.signal });
+    this.element.addEventListener('pointermove', e => this.dragMove(e), { signal: this.abort.signal });
+    for (const type of ['pointerup', 'pointercancel'] as const) this.element.addEventListener(type, e => this.dragEnd(e), { signal: this.abort.signal });
+    // Once the hold has armed, the finger is still inside the browser's scroll slop, so this
+    // cancels the pan that would otherwise start instead of the drag.
+    this.element.addEventListener('touchmove', e => { if (this.drag?.armed) e.preventDefault(); }, { signal: this.abort.signal, passive: false });
+    this.element.addEventListener('click', e => { if (this.suppressClick && e.detail > 0) { e.preventDefault(); e.stopImmediatePropagation(); } }, { signal: this.abort.signal, capture: true });
+    this.element.addEventListener('scroll', () => this.clearDrag(), { signal: this.abort.signal, capture: true });
+    window.addEventListener('blur', () => this.clearDrag(), { signal: this.abort.signal });
   }
   open(player: Player, npc: TownNPC): void {
     this.storageTab = 0; this.player = player; this.npc = npc; this.tab = npc.role === 'enchanter' ? 'improve' : 'shop';
@@ -344,6 +357,7 @@ export class ServicePanel {
   private cell(item: Item | null, key: string): HTMLButtonElement {
     const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'ui-slot'; cell.dataset.item = key;
     updateItemSlot(cell, item, { level: this.player.level, emptyMarkup: '', label: item ? itemDisplayName(item) : 'Empty slot' });
+    cell.classList.toggle('is-draggable', !!item && !!serviceDropZone(this.npc.role, this.tab, key.split(':')[0]));
     cell.disabled = !item; return cell;
   }
   private resolve(key: string): { item: Item; source?: ItemSource; request: ServiceRequest } | null {
@@ -450,6 +464,70 @@ export class ServicePanel {
       if (e.shiftKey && this.tab !== 'improve') this.confirm();
     }
     if (button.hasAttribute('data-confirm')) this.confirm();
+  }
+  private zoneElement(zone: ServiceDropZone): HTMLElement | null {
+    return this.element.querySelector<HTMLElement>(zone === 'inventory' ? '.service-grid' : zone === 'storage' ? '.service-storage' : '.service-offer');
+  }
+  /** A drag is the single-item shortcut: with a plural selection standing, the footer button owns the trade. */
+  private dragStart(e: PointerEvent): void {
+    this.clearDrag(); this.suppressClick = false;
+    if (this.saving || !e.isPrimary || e.button !== 0) return;
+    const cell = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-item]'), key = cell?.dataset.item;
+    if (!cell || !key || cell.classList.contains('service-sale-row') || this.sales.size >= 2 || this.takes.size >= 2) return;
+    const zone = serviceDropZone(this.npc.role, this.tab, key.split(':')[0]);
+    if (!zone || !this.zoneElement(zone) || !this.resolve(key)) return;
+    this.drag = { key, zone, id: e.pointerId, x: e.clientX, y: e.clientY, armed: false,
+      timer: e.pointerType === 'mouse' ? null : setTimeout(() => this.arm(cell), 650) };
+  }
+  private arm(cell: HTMLElement): void {
+    if (!this.drag) return;
+    this.drag.armed = true; this.drag.timer = null; this.tooltip.hide();
+    cell.setPointerCapture(this.drag.id);
+    cell.classList.add('is-dragging');
+    this.element.classList.add('is-item-dragging');
+    this.zoneElement(this.drag.zone)?.classList.add('is-drop-target');
+  }
+  private dragMove(e: PointerEvent): void {
+    const drag = this.drag;
+    if (!drag || drag.id !== e.pointerId) return;
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= 10) return;
+    // A finger that moves before the hold completes is scrolling the pack, not picking anything up.
+    if (!drag.armed) { if (drag.timer) this.clearDrag(); else this.arm(this.element.querySelector<HTMLElement>(`[data-item="${drag.key}"]`)!); return; }
+    this.zoneElement(drag.zone)?.classList.toggle('is-drop-hover', this.overZone(drag.zone, e));
+  }
+  private overZone(zone: ServiceDropZone, e: PointerEvent): boolean {
+    const target = this.zoneElement(zone), under = document.elementFromPoint(e.clientX, e.clientY);
+    return !!target && !!under && target.contains(under);
+  }
+  private dragEnd(e: PointerEvent): void {
+    const drag = this.drag;
+    if (!drag || drag.id !== e.pointerId) return;
+    const dropped = drag.armed && e.type === 'pointerup' && this.overZone(drag.zone, e);
+    this.clearDrag();
+    if (!drag.armed) return;
+    this.suppressClick = true;
+    if (dropped) this.drop(drag.key);
+  }
+  private clearDrag(): void {
+    if (this.drag?.timer) clearTimeout(this.drag.timer);
+    this.drag = null;
+    this.element.classList.remove('is-item-dragging');
+    for (const el of this.element.querySelectorAll('.is-dragging, .is-drop-target, .is-drop-hover')) el.classList.remove('is-dragging', 'is-drop-target', 'is-drop-hover');
+  }
+  /** A drop answers to the same quote as the footer button, and refuses out loud rather than
+   * committing a trade that would fail. */
+  private drop(key: string): void {
+    const value = this.resolve(key), message = this.element.querySelector<HTMLElement>('.service-message');
+    if (!value || !message) return;
+    const sheet = this.player.character;
+    const result = quoteService(sheet, this.npc, this.player.level, value.request);
+    if (!result.ok) { message.textContent = result.message; return; }
+    if (value.request.type !== 'sell' && goldBalance(sheet) < result.quote.price) { message.textContent = 'Not enough gold.'; return; }
+    const incoming = value.request.type === 'buy' || value.request.type === 'buyback' || value.request.type === 'retrieve';
+    if (incoming && result.item && !canPackItem(sheet, result.item)) { message.textContent = packSpaceProblem(sheet, result.item); return; }
+    this.sales.clear(); this.takes.clear();
+    this.selected = value.request; this.quote = result.quote;
+    void this.confirm();
   }
   private renderDetail(): void {
     if(this.tab==='respec'){this.renderRespec();return;}
