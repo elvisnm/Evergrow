@@ -240,9 +240,18 @@ its scroll. That reuses the hold duration and 10px slop of `armor-tint-prompt.ts
 touch tooltip to compete with, because `ServicePanel.hover` returns early in `touch-mode`. Arming
 takes pointer capture and a non-passive `touchmove` cancels the pan the browser would otherwise
 start, and a completed drag sets `suppressClick` so the release cannot also toggle a selection.
-The dragged item rides the pointer as a `.service-drag-ghost` built from `itemIconSVG`, because HTML5
-drag images are unavailable on this path. Nothing else lights up: the container being dragged over is
-deliberately left unhighlighted, so the ghost alone says what is in hand.
+The dragged item rides the pointer as a `.service-drag-ghost` cloned from the source cell -- its own
+markup at its own measured size, so nothing resizes mid-gesture -- because HTML5 drag images are
+unavailable on this path. Nothing else lights up: the container being dragged over is deliberately
+left unhighlighted, so the ghost alone says what is in hand.
+
+Where an item lands is the cell it was dropped on. `dropCell` reads that cell from the grid geometry
+for both directions; an arriving item is then moved there by `place` only when the cell is free,
+otherwise it keeps the first free cell `addInventoryItem` or the store already gave it. A same-
+container rearrange still swaps with an occupant, matching `planInventoryMove` and the character
+panel. A dragged sale asks first through the `.service-confirm` overlay, since one gesture would
+otherwise turn an item into gold; every other drop commits directly, because each is reversible
+from the same panel.
 
 Dropping back into the container an item already lives in rearranges it instead of trading: the home
 zone is checked before the trade zone, and the two are always different elements. The bag reuses
