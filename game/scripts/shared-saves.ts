@@ -1,9 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import type { Plugin } from 'vite';
 
 /** Dev-only shared character store so every browser on the LAN plays the same characters off one
  *  dev server. Never built into the game: `apply: 'serve'` keeps it out of production bundles. */
-const STORE = new URL('../../.evergrow-shared-saves.json', import.meta.url);
+// EVERGROW_SAVE_STORE points the sandbox at a volume that outlives the container; a plain
+// `npm run dev` keeps the store beside the repo.
+const STORE = process.env.EVERGROW_SAVE_STORE ? pathToFileURL(process.env.EVERGROW_SAVE_STORE)
+  : new URL('../../.evergrow-shared-saves.json', import.meta.url);
 const LIMIT = 8 * 1024 * 1024;
 
 type Store = { version: number; values: Record<string, string> };
