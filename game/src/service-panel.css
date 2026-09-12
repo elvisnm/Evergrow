@@ -118,3 +118,5 @@
 .service-panel.is-item-dragging .ui-slot.is-dragging { opacity: .45; }
 .service-panel.is-item-dragging .is-drop-target { outline: 2px dashed var(--service-color); outline-offset: 2px; }
 .service-panel.is-item-dragging .is-drop-target.is-drop-hover { outline-style: solid; background: color-mix(in srgb, var(--service-color) 12%, transparent); }
+.service-drag-ghost { position:fixed; top:0; left:0; z-index:60; pointer-events:none; padding:4px; background:#0f171cdd; border:1px solid color-mix(in srgb,var(--item-color,#9fb6c0) 60%,transparent); box-shadow:0 8px 24px #000a; }
+.service-drag-ghost svg { display:block; }

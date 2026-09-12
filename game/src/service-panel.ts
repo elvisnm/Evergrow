@@ -45,6 +45,7 @@ export class ServicePanel {
    * itself — 10px of movement with a mouse, a 650ms still hold with a finger. */
   private drag: { key: string; zone: ServiceDropZone; id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> | null; armed: boolean } | null = null;
   private suppressClick = false;
+  private ghost: HTMLElement | null = null;
   private abort = new AbortController();
   private focus: { dispose(): void } | null = null;
   private actions: { close(): void; sort(target: 'storage' | 'inventory', tab?: number): void; trade(quote: ServiceQuote): Promise<{ ok: boolean; message: string }> };
@@ -477,22 +478,33 @@ export class ServicePanel {
     const zone = serviceDropZone(this.npc.role, this.tab, key.split(':')[0]);
     if (!zone || !this.zoneElement(zone) || !this.resolve(key)) return;
     this.drag = { key, zone, id: e.pointerId, x: e.clientX, y: e.clientY, armed: false,
-      timer: e.pointerType === 'mouse' ? null : setTimeout(() => this.arm(cell), 650) };
+      timer: e.pointerType === 'mouse' ? null : setTimeout(() => this.arm(cell, e.clientX, e.clientY), 650) };
   }
-  private arm(cell: HTMLElement): void {
+  private arm(cell: HTMLElement, x: number, y: number): void {
     if (!this.drag) return;
     this.drag.armed = true; this.drag.timer = null; this.tooltip.hide();
     cell.setPointerCapture(this.drag.id);
     cell.classList.add('is-dragging');
     this.element.classList.add('is-item-dragging');
     this.zoneElement(this.drag.zone)?.classList.add('is-drop-target');
+    // The item itself travels with the pointer; the zone highlight only says where it may land.
+    const item = this.resolve(this.drag.key)?.item;
+    if (!item) return;
+    this.ghost = document.createElement('div');
+    this.ghost.className = 'service-drag-ghost';
+    this.ghost.style.setProperty('--item-color', TIER_COLORS[item.tier]);
+    this.ghost.innerHTML = itemIconSVG(item, 56);
+    document.body.append(this.ghost);
+    this.moveGhost(x, y);
   }
+  private moveGhost(x: number, y: number): void { if (this.ghost) this.ghost.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`; }
   private dragMove(e: PointerEvent): void {
     const drag = this.drag;
     if (!drag || drag.id !== e.pointerId) return;
     if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= 10) return;
     // A finger that moves before the hold completes is scrolling the pack, not picking anything up.
-    if (!drag.armed) { if (drag.timer) this.clearDrag(); else this.arm(this.element.querySelector<HTMLElement>(`[data-item="${drag.key}"]`)!); return; }
+    if (!drag.armed) { if (drag.timer) this.clearDrag(); else this.arm(this.element.querySelector<HTMLElement>(`[data-item="${drag.key}"]`)!, e.clientX, e.clientY); return; }
+    this.moveGhost(e.clientX, e.clientY);
     this.zoneElement(drag.zone)?.classList.toggle('is-drop-hover', this.overZone(drag.zone, e));
   }
   private overZone(zone: ServiceDropZone, e: PointerEvent): boolean {
@@ -510,7 +522,7 @@ export class ServicePanel {
   }
   private clearDrag(): void {
     if (this.drag?.timer) clearTimeout(this.drag.timer);
-    this.drag = null;
+    this.drag = null; this.ghost?.remove(); this.ghost = null;
     this.element.classList.remove('is-item-dragging');
     for (const el of this.element.querySelectorAll('.is-dragging, .is-drop-target, .is-drop-hover')) el.classList.remove('is-dragging', 'is-drop-target', 'is-drop-hover');
   }
@@ -523,6 +535,10 @@ export class ServicePanel {
     const result = quoteService(sheet, this.npc, this.player.level, value.request);
     if (!result.ok) { message.textContent = result.message; return; }
     if (value.request.type !== 'sell' && goldBalance(sheet) < result.quote.price) { message.textContent = 'Not enough gold.'; return; }
+    if (value.request.type === 'store') {
+      const start = (value.request.tab ?? 0) * STASH_CAPACITY, stash = sheet.stash ?? [];
+      if (!Array.from({ length: STASH_CAPACITY }, (_, i) => stash[start + i] ?? null).some(slot => !slot)) { message.textContent = 'Storage tab full.'; return; }
+    }
     const incoming = value.request.type === 'buy' || value.request.type === 'buyback' || value.request.type === 'retrieve';
     if (incoming && result.item && !canPackItem(sheet, result.item)) { message.textContent = packSpaceProblem(sheet, result.item); return; }
     this.sales.clear(); this.takes.clear();

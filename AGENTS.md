@@ -230,9 +230,8 @@ retrieves from the stash, the Sell tab drops onto the offer pane, and stock or b
 the bag. Selling is tied to `tab === 'sell'` explicitly rather than inferred from the sale list --
 the list also renders on the shop tab once a selection exists, and the shop tab deliberately has no
 drop zone. The commit in `ServicePanel.drop` re-quotes through `quoteService` and adds the same gold
-and `canPackItem` guards the footer button applies, so a drop that would fail is refused into
-`.service-message` instead of attempted; a full storage tab falls through to `planService`, which
-refuses with its own message. Only a single item may be dragged: with two or more selected the
+and `canPackItem` guards the footer button applies, plus the free-slot count for a store, so a drop
+that would fail is refused into `.service-message` instead of attempted. Only a single item may be dragged: with two or more selected the
 gesture never starts, which is the same predicate `syncMultiSelect` already uses.
 
 One pointer path serves mouse and touch. The gesture arms after 10px of mouse movement, or after a
@@ -241,3 +240,6 @@ its scroll. That reuses the hold duration and 10px slop of `armor-tint-prompt.ts
 touch tooltip to compete with, because `ServicePanel.hover` returns early in `touch-mode`. Arming
 takes pointer capture and a non-passive `touchmove` cancels the pan the browser would otherwise
 start, and a completed drag sets `suppressClick` so the release cannot also toggle a selection.
+The dragged item rides the pointer as a `.service-drag-ghost` built from `itemIconSVG`, because HTML5
+drag images are unavailable on this path: the zone outline says where the item may land, the ghost
+says what is in hand.
