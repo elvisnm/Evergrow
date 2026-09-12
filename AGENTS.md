@@ -241,5 +241,13 @@ touch tooltip to compete with, because `ServicePanel.hover` returns early in `to
 takes pointer capture and a non-passive `touchmove` cancels the pan the browser would otherwise
 start, and a completed drag sets `suppressClick` so the release cannot also toggle a selection.
 The dragged item rides the pointer as a `.service-drag-ghost` built from `itemIconSVG`, because HTML5
-drag images are unavailable on this path: the zone outline says where the item may land, the ghost
-says what is in hand.
+drag images are unavailable on this path. Nothing else lights up: the container being dragged over is
+deliberately left unhighlighted, so the ghost alone says what is in hand.
+
+Dropping back into the container an item already lives in rearranges it instead of trading: the home
+zone is checked before the trade zone, and the two are always different elements. The bag reuses
+`moveInventoryItem` through the existing `moveItem` command; the chest gets `moveStorageItem` in
+`inventory-tools.ts`, a swap between two slots of one unlocked tab, since `storageGridLayout` makes a
+stored item's cell its slot index. The target cell is read from the grid geometry the same way
+`inventory-panel.ts`'s `dragLocation` does, rather than from per-cell markup the service grids
+do not have.

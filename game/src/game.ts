@@ -225,6 +225,7 @@ export class Game {
       this.servicePanel = this.lifetime.own(new ServicePanel(this.shell.panelMount, {
         close: () => this.resume(), trade: quote => this.trade(quote),
         sort: (target,tab) => this.characterAction(target === 'storage' ? {type:'sortStorage',tab} : {type:'sortInventory',mode:'compact'}),
+        move: (target,from,to) => this.characterAction(target === 'storage' ? {type:'moveStorage',from,to} : {type:'moveItem',from,to}),
       }));
       this.expeditionPanel=this.lifetime.own(new ExpeditionPanel(this.shell.panelMount,{close:()=>this.resume(),enter:async action=>{const ok=await this.switchDungeon(action);if(ok)this.resume();return ok;}}));
       this.dungeonMap = this.lifetime.own(new DungeonMap(this.shell.mapMount,()=>this.closeMap(),()=>this.worldMap.open({x:this.sim.expeditions.surfaceX,y:this.sim.expeditions.surfaceY,angle:0})));

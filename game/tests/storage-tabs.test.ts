@@ -4,7 +4,7 @@ import { createCharacterSheet, generateItem } from '../src/items.ts';
 import { quoteService, planService, type ServiceRequest } from '../src/commerce.ts';
 import { executeService } from '../src/commerce-command.ts';
 import { storageTabCount, storageTabItems, STORAGE_TAB_PRICES, STASH_CAPACITY } from '../src/storage-content.ts';
-import { sortStorage } from '../src/inventory-tools.ts';
+import { sortStorage, moveStorageItem } from '../src/inventory-tools.ts';
 import { addInventoryItem } from '../src/inventory.ts';
 import { decodeCharacterSave } from '../src/character-save.ts';
 import { Simulation } from '../src/simulation.ts';
@@ -182,4 +182,22 @@ test('bulk retrieve empties the chosen slots and refuses a batch the pack cannot
   assert.equal(cramped.ok,false); assert.match(cramped.ok?'':cramped.message,/Charm grid full/);
   // The ring still comes out on its own; only the charm region is short on room.
   assert.ok(quote(charms,{type:'retrieveMany',items:[mixed[1]]}));
+});
+
+test('rearranging a tab swaps two of its slots and never reaches across tabs', () => {
+  let sheet = wealthy();
+  sheet.stash = Array.from({length:STASH_CAPACITY*2},()=>null);
+  const first = generateItem(1,5,'weapon'), second = generateItem(2,5,'weapon');
+  sheet.stash[0] = first; sheet.stash[3] = second;
+  // An occupied target swaps; an empty one just moves.
+  assert.ok(moveStorageItem(sheet,0,3).ok);
+  assert.equal(sheet.stash[0]?.id, second.id);
+  assert.equal(sheet.stash[3]?.id, first.id);
+  assert.ok(moveStorageItem(sheet,3,40).ok);
+  assert.equal(sheet.stash[3], null);
+  assert.equal(sheet.stash[40]?.id, first.id);
+  // The second tab is locked, and a move never crosses a tab boundary anyway.
+  assert.equal(moveStorageItem(sheet,40,STASH_CAPACITY).ok, false);
+  assert.equal(sheet.stash[40]?.id, first.id);
+  assert.equal(moveStorageItem(sheet,40,-1).ok, false);
 });

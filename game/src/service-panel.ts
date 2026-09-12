@@ -43,12 +43,12 @@ export class ServicePanel {
   private revealed:Item|null=null;
   /** One pointer drag serves mouse and touch alike; `armed` flips once the gesture has proved
    * itself — 10px of movement with a mouse, a 650ms still hold with a finger. */
-  private drag: { key: string; zone: ServiceDropZone; id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> | null; armed: boolean } | null = null;
+  private drag: { key: string; zone: ServiceDropZone | null; home: ServiceDropZone | null; id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> | null; armed: boolean } | null = null;
   private suppressClick = false;
   private ghost: HTMLElement | null = null;
   private abort = new AbortController();
   private focus: { dispose(): void } | null = null;
-  private actions: { close(): void; sort(target: 'storage' | 'inventory', tab?: number): void; trade(quote: ServiceQuote): Promise<{ ok: boolean; message: string }> };
+  private actions: { close(): void; sort(target: 'storage' | 'inventory', tab?: number): void; move(target: 'storage' | 'inventory', from: number, to: number): void; trade(quote: ServiceQuote): Promise<{ ok: boolean; message: string }> };
   constructor(mount: HTMLElement, actions: ServicePanel['actions']) {
     this.actions = actions;
     this.element = document.createElement('section'); this.element.className = 'service-panel ui-window'; this.element.hidden = true;
@@ -358,7 +358,7 @@ export class ServicePanel {
   private cell(item: Item | null, key: string): HTMLButtonElement {
     const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'ui-slot'; cell.dataset.item = key;
     updateItemSlot(cell, item, { level: this.player.level, emptyMarkup: '', label: item ? itemDisplayName(item) : 'Empty slot' });
-    cell.classList.toggle('is-draggable', !!item && !!serviceDropZone(this.npc.role, this.tab, key.split(':')[0]));
+    cell.classList.toggle('is-draggable', !!item && !!(this.homeZone(key) || serviceDropZone(this.npc.role, this.tab, key.split(':')[0])));
     cell.disabled = !item; return cell;
   }
   private resolve(key: string): { item: Item; source?: ItemSource; request: ServiceRequest } | null {
@@ -469,15 +469,22 @@ export class ServicePanel {
   private zoneElement(zone: ServiceDropZone): HTMLElement | null {
     return this.element.querySelector<HTMLElement>(zone === 'inventory' ? '.service-grid' : zone === 'storage' ? '.service-storage' : '.service-offer');
   }
+  /** The container an item already lives in: dropping back into it rearranges rather than trades. */
+  private homeZone(key: string): ServiceDropZone | null {
+    const type = key.split(':')[0];
+    const zone = type === 'bag' ? 'inventory' : type === 'stash' ? 'storage' : null;
+    return zone && this.zoneElement(zone) ? zone : null;
+  }
   /** A drag is the single-item shortcut: with a plural selection standing, the footer button owns the trade. */
   private dragStart(e: PointerEvent): void {
     this.clearDrag(); this.suppressClick = false;
     if (this.saving || !e.isPrimary || e.button !== 0) return;
     const cell = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-item]'), key = cell?.dataset.item;
     if (!cell || !key || cell.classList.contains('service-sale-row') || this.sales.size >= 2 || this.takes.size >= 2) return;
-    const zone = serviceDropZone(this.npc.role, this.tab, key.split(':')[0]);
-    if (!zone || !this.zoneElement(zone) || !this.resolve(key)) return;
-    this.drag = { key, zone, id: e.pointerId, x: e.clientX, y: e.clientY, armed: false,
+    const trade = serviceDropZone(this.npc.role, this.tab, key.split(':')[0]), home = this.homeZone(key);
+    const zone = trade && this.zoneElement(trade) ? trade : null;
+    if ((!zone && !home) || !this.resolve(key)) return;
+    this.drag = { key, zone, home, id: e.pointerId, x: e.clientX, y: e.clientY, armed: false,
       timer: e.pointerType === 'mouse' ? null : setTimeout(() => this.arm(cell, e.clientX, e.clientY), 650) };
   }
   private arm(cell: HTMLElement, x: number, y: number): void {
@@ -486,7 +493,6 @@ export class ServicePanel {
     cell.setPointerCapture(this.drag.id);
     cell.classList.add('is-dragging');
     this.element.classList.add('is-item-dragging');
-    this.zoneElement(this.drag.zone)?.classList.add('is-drop-target');
     // The item itself travels with the pointer; the zone highlight only says where it may land.
     const item = this.resolve(this.drag.key)?.item;
     if (!item) return;
@@ -505,7 +511,6 @@ export class ServicePanel {
     // A finger that moves before the hold completes is scrolling the pack, not picking anything up.
     if (!drag.armed) { if (drag.timer) this.clearDrag(); else this.arm(this.element.querySelector<HTMLElement>(`[data-item="${drag.key}"]`)!, e.clientX, e.clientY); return; }
     this.moveGhost(e.clientX, e.clientY);
-    this.zoneElement(drag.zone)?.classList.toggle('is-drop-hover', this.overZone(drag.zone, e));
   }
   private overZone(zone: ServiceDropZone, e: PointerEvent): boolean {
     const target = this.zoneElement(zone), under = document.elementFromPoint(e.clientX, e.clientY);
@@ -514,17 +519,40 @@ export class ServicePanel {
   private dragEnd(e: PointerEvent): void {
     const drag = this.drag;
     if (!drag || drag.id !== e.pointerId) return;
-    const dropped = drag.armed && e.type === 'pointerup' && this.overZone(drag.zone, e);
+    const released = drag.armed && e.type === 'pointerup';
+    const home = released && drag.home && this.overZone(drag.home, e) ? drag.home : null;
+    const trades = released && !home && drag.zone && this.overZone(drag.zone, e);
     this.clearDrag();
     if (!drag.armed) return;
     this.suppressClick = true;
-    if (dropped) this.drop(drag.key);
+    if (home) this.rearrange(drag.key, home, e);
+    else if (trades) this.drop(drag.key);
   }
   private clearDrag(): void {
     if (this.drag?.timer) clearTimeout(this.drag.timer);
     this.drag = null; this.ghost?.remove(); this.ghost = null;
     this.element.classList.remove('is-item-dragging');
-    for (const el of this.element.querySelectorAll('.is-dragging, .is-drop-target, .is-drop-hover')) el.classList.remove('is-dragging', 'is-drop-target', 'is-drop-hover');
+    for (const el of this.element.querySelectorAll('.is-dragging')) el.classList.remove('is-dragging');
+  }
+  /** Dropping inside an item's own container reorders it there: the bag keeps its tetris cells,
+   * the chest swaps the two slots, and neither goes near a trade. */
+  private rearrange(key: string, home: ServiceDropZone, e: PointerEvent): void {
+    const root = this.zoneElement(home);
+    const grid = root && [...root.querySelectorAll<HTMLElement>('.character-bag, .character-charm-grid')].find(candidate => {
+      const box = candidate.getBoundingClientRect();
+      return e.clientX >= box.left && e.clientX < box.right && e.clientY >= box.top && e.clientY < box.bottom;
+    });
+    const first = grid?.querySelector<HTMLElement>('.character-grid-cell')?.getBoundingClientRect();
+    if (!grid || !first) return;
+    const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+    const x = Math.floor((e.clientX - first.left) / (first.width + gap)), y = Math.floor((e.clientY - first.top) / (first.height + gap));
+    const charms = grid.classList.contains('character-charm-grid');
+    const rows = home === 'storage' ? STASH_CAPACITY / PACK_COLUMNS : charms ? CHARM_ROWS : PACK_ROWS;
+    if (x < 0 || y < 0 || x >= PACK_COLUMNS || y >= rows) return;
+    const cell = y * PACK_COLUMNS + x, from = Number(key.split(':')[1]);
+    this.actions.move(home === 'storage' ? 'storage' : 'inventory', from,
+      home === 'storage' ? this.storageTab * STASH_CAPACITY + cell : charms ? PACK_CELLS + cell : cell);
+    this.render();
   }
   /** A drop answers to the same quote as the footer button, and refuses out loud rather than
    * committing a trade that would fail. */

@@ -6,7 +6,7 @@ import type { ActionResult, Attribute, EquipmentSlot, SkillId } from './characte
 import { equipItem, unequipItem, moveInventoryItem, allocateAttribute } from './inventory.ts';
 import { allocateSkillRoute } from './skill-tree-routes.ts';
 import { assignSkill, refreshCharacter } from './character.ts';
-import { equipBest, sortInventory, sortStorage, type InventorySort, type EquipBestChoice } from './inventory-tools.ts';
+import { equipBest, sortInventory, sortStorage, moveStorageItem, type InventorySort, type EquipBestChoice } from './inventory-tools.ts';
 
 export type CharacterCommand =
   | { type: 'lockItem'; id: string; locked: boolean }
@@ -19,6 +19,7 @@ export type CharacterCommand =
   | { type: 'equip'; index: number; slot?: EquipmentSlot }
   | { type: 'unequip'; slot: EquipmentSlot; index?: number }
   | { type: 'moveItem'; from: number; to: number }
+  | { type: 'moveStorage'; from: number; to: number }
   | { type: 'allocateAttribute'; attribute: Attribute }
   | { type: 'allocateNode'; id: string }
   | { type: 'assignSkill'; slot: number; skill: SkillId | null };
@@ -41,6 +42,7 @@ export function executeCharacterCommand(player: Player, command: CharacterComman
     case 'equip': result = equipItem(player.character, command.index, player.level, command.slot); break;
     case 'unequip': result = unequipItem(player.character, command.slot, command.index); break;
     case 'moveItem': result = moveInventoryItem(player.character, command.from, command.to); break;
+    case 'moveStorage': result = moveStorageItem(player.character, command.from, command.to); break;
     case 'allocateAttribute': result = allocateAttribute(player.character, command.attribute); break;
     case 'allocateNode': result = allocateSkillRoute(player.character, command.id); break;
     case 'assignSkill': result = assignSkill(player, command.slot, command.skill); break;

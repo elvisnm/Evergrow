@@ -112,11 +112,9 @@
 
 .service-respec{padding:36px;display:flex;align-items:center;flex-direction:column;text-align:center;gap:16px}.service-respec h3,.service-respec p{margin:0}.service-respec p{line-height:1.7}.service-respec-sigil{width:72px;color:var(--service-color)}.service-respec-sigil svg{width:100%;height:auto}.service-respec-values{display:flex;gap:60px;margin:18px 0}.service-respec-values>div{display:flex;flex-direction:column;gap:8px}.service-respec-values strong{font-size:40px;color:var(--ui-gold,#d1be89)}.service-respec-values span{color:var(--ui-muted,#95a6ac)}
 
-/* Drag-and-drop shortcut: what can be picked up, and where it may land. */
+/* Drag-and-drop shortcut: the item travels with the pointer, nothing else lights up. */
 .service-panel:not(.is-multi-select) .ui-slot.is-draggable { cursor: grab; }
 .service-panel.is-item-dragging, .service-panel.is-item-dragging .ui-slot.is-draggable { cursor: grabbing; }
 .service-panel.is-item-dragging .ui-slot.is-dragging { opacity: .45; }
-.service-panel.is-item-dragging .is-drop-target { outline: 2px dashed var(--service-color); outline-offset: 2px; }
-.service-panel.is-item-dragging .is-drop-target.is-drop-hover { outline-style: solid; background: color-mix(in srgb, var(--service-color) 12%, transparent); }
 .service-drag-ghost { position:fixed; top:0; left:0; z-index:60; pointer-events:none; padding:4px; background:#0f171cdd; border:1px solid color-mix(in srgb,var(--item-color,#9fb6c0) 60%,transparent); box-shadow:0 8px 24px #000a; }
 .service-drag-ghost svg { display:block; }
