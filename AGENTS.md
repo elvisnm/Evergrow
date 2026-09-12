@@ -194,3 +194,10 @@ rarity chips already select everything between them, so it was a second control 
 receipt on the tab that made it; nothing reroutes the player to the Sell tab. `service-panel.ts`'s `sellable` getter holds the
 two exceptions: the improve tabs, where a bag click already means "work on this item", and the chest keeper, which trades
 nothing. Selection is built from `bulkSaleItems`, keeping one eligibility rule between the selector and the quote.
+
+The chest keeper reuses the same selection for `storeMany`: `bulkTarget` says whether a bag click feeds a sale or a store, so
+the rarity chips, the `sales` map and the multi-select badge are shared rather than duplicated. Storage differs in two ways
+that are deliberate. Locks guard against selling, not against storing, so `bulkStorableItems` keeps them -- bulk must never be
+stricter than the single store that already ignores them. And the tab's free space is checked in `quoteService`, not only in
+`planService`, because the panel labels its button from the quote; without it the button would offer a store that fails on
+confirm. Placement in `planService` walks a cursor forward past the slots the same batch just filled.

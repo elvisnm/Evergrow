@@ -1,6 +1,6 @@
 import { STASH_CAPACITY, storageTabCount, hasStorageTab, nextStorageTabPrice } from './storage-content.ts';
 export { STASH_CAPACITY } from './storage-content.ts';
-import { bulkSaleItems } from './item-protection.ts';
+import { bulkSaleItems, bulkStorableItems } from './item-protection.ts';
 import { normalizePackLayout, canPackItem, packSpaceProblem } from './inventory-grid.ts';
 import { servicePolicy } from './settlement-services.ts';
 import { itemMaterialValue, itemMaterialService } from './item-materials.ts';
@@ -71,6 +71,7 @@ export const respecPoints = (sheet: CharacterSheet) => sheet.allocatedNodes.leng
 export const attributeResetPoints = (sheet: CharacterSheet) => Object.values(sheet.attributes).reduce((sum, value) => sum + value - 10, 0);
 export type ServiceRequest = {type:'resetAttributes'} | {type:'respec'} | {type:'gamble';kind:ItemKind} | {type:'store';bag:number;tab?:number} | {type:'unlockStorage';tab:number} | {type:'retrieve';slot:number} | { type: 'buy'; slot: number } | { type: 'sell'; source: ItemSource }
   | { type: 'sellMany'; items: SaleItem[]; includeActiveCharms?: boolean }
+| { type: 'storeMany'; items: SaleItem[]; tab?: number; includeActiveCharms?: boolean }
   | { type: 'buyback'; id: string } | { type: 'improve'; source: ItemSource; operation: Improvement; affix?: number; focus?:AffixFocus };
 export interface ServiceQuote { npcId: string; revision: number; epoch: number; itemId: string; itemRevision: number; price: number; request: ServiceRequest; }
 export type QuoteResult = { ok: false; message: string } | { ok: true; quote: ServiceQuote; item: Item | null };
@@ -114,6 +115,25 @@ export function quoteService(sheet: CharacterSheet, npc: TownNPC, level: number,
     const index=request.type==='store'?request.bag:request.slot;
     if(!Number.isInteger(index)||index<0)return fail('Invalid storage slot.');
     item=(request.type==='store'?sheet.inventory:sheet.stash??[])[index]??null;
+  } else if(request.type==='storeMany') {
+    if(npc.role!=='stash')return fail('Visit a storage chest.');
+    if(!hasStorageTab(sheet,request.tab??0))return fail('This storage tab is locked.');
+    if(request.includeActiveCharms!==undefined&&typeof request.includeActiveCharms!=='boolean')return fail('Invalid charm selection.');
+    if(!Array.isArray(request.items)||!request.items.length||request.items.length>sheet.inventory.length)return fail('Select items to store.');
+    // Locks guard against selling, not against storing: a single store already ignores them.
+    const eligible=new Set(bulkStorableItems(sheet,level,request.includeActiveCharms).map(i=>i.id));
+    const taken=new Set<number>(),chosen=new Set<string>();
+    for(const selected of request.items) {
+      if(!selected||!Number.isInteger(selected.bag)||selected.bag<0||selected.bag>=sheet.inventory.length||taken.has(selected.bag)||chosen.has(selected.id))return fail('Invalid item selection.');
+      const owned=sheet.inventory[selected.bag];
+      if(!owned||owned.id!==selected.id||owned.recipe.revision!==selected.revision)return fail('The selection changed. Select the items again.');
+      if(!eligible.has(owned.id))return fail('Enable active charms to include them in a bulk store.');
+      taken.add(selected.bag);chosen.add(selected.id);item??=owned;
+    }
+    // The panel reads this quote to label its button, so the tab has to fit before it offers the trade.
+    const start=(request.tab??0)*STASH_CAPACITY,stash=sheet.stash??[];
+    const free=Array.from({length:STASH_CAPACITY},(_,i)=>stash[start+i]??null).filter(slot=>!slot).length;
+    if(request.items.length>free)return fail(free?`Only ${free} slots are free in this tab.`:'Storage tab full.');
   } else if(npc.role==='stash')return fail('This service is not available here.');
   else if (request.type === 'sellMany') {
     if (!Array.isArray(request.items) || !request.items.length || request.items.length > sheet.inventory.length) return fail('Select items to sell.');
@@ -149,7 +169,7 @@ export function quoteService(sheet: CharacterSheet, npc: TownNPC, level: number,
   if(request.type==='sell'&&item.locked)return fail('Unlock this item before selling it.');
   if (!Number.isSafeInteger(price) || price < 0 || sheet.commerce.revision >= Number.MAX_SAFE_INTEGER || sheet.commerce.operations >= Number.MAX_SAFE_INTEGER) return fail('This transaction exceeds the supported limit.');
   return { ok: true, item, quote: { npcId: npc.id, revision: sheet.commerce.revision, epoch: stockEpoch(level), itemId: item.id,
-    itemRevision: item.recipe.revision, price, request: request.type === 'sellMany' ? { type: 'sellMany', items: request.items.map(i => ({ ...i })), ...(request.includeActiveCharms===undefined?{}:{includeActiveCharms:request.includeActiveCharms}) } : { ...request } } };
+    itemRevision: item.recipe.revision, price, request: request.type === 'sellMany' || request.type === 'storeMany' ? { ...request, items: request.items.map(i => ({ ...i })) } : { ...request } } };
 }
 export type TradePlan = { ok: false; message: string } | { ok: true; character: CharacterSheet; message: string; item: Item | null };
 /** No live mutation: the caller persists this complete sheet before publishing it. */
@@ -185,6 +205,18 @@ export function planService(sheet: CharacterSheet, npc: TownNPC, level: number, 
   }
   if (!item) return {ok:false,message:'This item is no longer available.'};
   if ((request.type === 'buy' || request.type === 'buyback' || request.type === 'gamble' || request.type === 'retrieve') && !canPackItem(character, item)) return { ok: false, message: packSpaceProblem(character,item) };
+  if(request.type==='storeMany') {
+    // Placement walks forward past the slots this batch just filled; indexOf alone would re-find them.
+    const start=(request.tab??0)*STASH_CAPACITY;let cursor=start;
+    for(const selected of request.items) {
+      const slot=character.stash!.indexOf(null,cursor);
+      if(slot<0||slot>=start+STASH_CAPACITY)return {ok:false,message:'Storage tab full.'};
+      character.stash![slot]=character.inventory[selected.bag]!;
+      character.inventory[selected.bag]=null;cursor=slot+1;
+    }
+    normalizePackLayout(character);
+    return {ok:true,character,message:`Stored ${request.items.length} items.`,item};
+  }
   if(request.type==='store'||request.type==='retrieve') {
     if(request.type==='store'){
       const start=(request.tab??0)*STASH_CAPACITY,slot=character.stash!.indexOf(null,start);

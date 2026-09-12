@@ -1,6 +1,6 @@
 import { storageTabCount, storageTabItems, hasStorageTab, MAX_STORAGE_TABS, nextStorageTabPrice } from './storage-content.ts';
 import { itemAffixCount } from './items.ts';
-import { bulkSaleItems, ITEM_LOCK_ICON } from './item-protection.ts';
+import { bulkSaleItems, bulkStorableItems, ITEM_LOCK_ICON } from './item-protection.ts';
 import { PACK_COLUMNS, PACK_ROWS, PACK_CELLS, CHARM_ROWS, resolvePackLayout, storageGridLayout, canPackItem, packSpaceProblem } from './inventory-grid.ts';
 import './inventory-pack.css';
 import { settlementBenefits } from './settlement-services.ts';
@@ -104,6 +104,16 @@ export class ServicePanel {
   /** Selling is offered wherever the bag is shown, except where a bag click already means
    * something else: the improve tabs pick one item to work on, and the chest keeper trades nothing. */
   private get sellable(): boolean { return this.npc.role !== 'stash' && this.tab !== 'improve'; }
+  /** Which bulk action a bag click feeds: the chest stores, every other counter sells, and the
+   * improve tabs keep the click for choosing the one item to work on. */
+  private get bulkTarget(): 'sell' | 'store' | null {
+    if(this.npc.role==='stash') return hasStorageTab(this.player.character,this.storageTab)?'store':null;
+    return this.tab==='improve'?null:'sell';
+  }
+  private bulkEligible(): Item[] {
+    return this.bulkTarget==='store'?bulkStorableItems(this.player.character,this.player.level,this.includeActiveCharms)
+      :bulkSaleItems(this.player.character,this.player.level,this.includeActiveCharms);
+  }
   private render(): void {
     this.element.classList.toggle('is-storage',this.npc.role==='stash');
     if(this.tab==='respec'){this.renderRespec();return;}
@@ -116,7 +126,7 @@ export class ServicePanel {
     const bagScroll=this.element.querySelector('.service-bag')?.scrollTop??0;
     const focused = this.element.querySelector<HTMLElement>(':focus');
     const active = focused?.dataset.item;
-    const control = focused?.hasAttribute('data-clear-sales') ? '[data-clear-sales]' : focused?.dataset.sellTier ? `[data-sell-tier="${focused.dataset.sellTier}"]` : focused?.hasAttribute('data-operation') ? '[data-operation]' : focused?.dataset.tab ? `[data-tab="${focused.dataset.tab}"]`
+    const control = focused?.hasAttribute('data-clear-sales') ? '[data-clear-sales]' : focused?.dataset.bulkTier ? `[data-bulk-tier="${focused.dataset.bulkTier}"]` : focused?.hasAttribute('data-operation') ? '[data-operation]' : focused?.dataset.tab ? `[data-tab="${focused.dataset.tab}"]`
       : focused?.hasAttribute('data-confirm') ? '[data-confirm]' : focused?.hasAttribute('data-close') ? '[data-close]' : null;
     this.element.style.setProperty('--service-color', NPC_COLORS[this.npc.role]);
     this.element.innerHTML = `${this.headerMarkup()}
@@ -190,7 +200,7 @@ export class ServicePanel {
         <nav class="storage-tabs" aria-label="Storage tabs">${Array.from({length:MAX_STORAGE_TABS},(_,tab)=>`<button type="button" class="ui-button ui-button--quiet" data-storage-tab="${tab}" aria-pressed="${this.storageTab===tab}" ${tab>count?'disabled':''} aria-label="${tab<count?'Open':'Unlock'} storage tab ${tab+1}">${tab>=count?ITEM_LOCK_ICON:''}<span>Tab ${tab+1}</span></button>`).join('')}</nav>
         ${owned?`<div class="service-storage-toolbar">${this.sortMarkup('storage')}<span>${storageTabItems(sheet,this.storageTab).filter(Boolean).length} / ${STASH_CAPACITY}</span></div><div class="ui-item-grid-scroll"><div class="service-storage inventory-pack"></div></div>`:
           `<div class="storage-unlock"><span class="storage-unlock-icon">${ITEM_LOCK_ICON}</span><h3>Storage tab ${this.storageTab+1}</h3><p>${STASH_CAPACITY} more items</p><strong>${nextStorageTabPrice(sheet)?.toLocaleString()} <small>gold</small></strong></div>`}
-      </section><section class="service-bag ui-scroll-area"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></div>
+      </section><section class="service-bag ui-scroll-area"><div class="service-section-heading"><h3>Inventory</h3></div>${this.sortMarkup('inventory')}${owned?this.rarityControls():''}<div class="ui-item-grid-scroll"><div class="service-grid inventory-pack"></div></div></section></div>
       <footer class="ui-window-footer"><span class="service-message" role="status"></span><button class="ui-button ui-button--primary" data-confirm disabled>Select an item</button></footer>`;
     this.renderInventoryPack();
     if (owned) this.renderStoragePack();
@@ -203,9 +213,21 @@ export class ServicePanel {
     this.quote = null;
     const button=this.element.querySelector<HTMLButtonElement>('[data-confirm]')!, message=this.element.querySelector<HTMLElement>('.service-message')!;
     button.disabled=true; button.textContent='Select an item'; message.textContent='';
+    this.syncMultiSelect(); this.syncRarities();
     for (const cell of this.element.querySelectorAll<HTMLElement>('[data-item]')) {
       const entry = this.resolve(cell.dataset.item!);
-      cell.classList.toggle('is-selected',Boolean(entry && JSON.stringify(entry.request)===JSON.stringify(this.selected)));
+      const bulk = !!entry && !!entry.source && 'bag' in entry.source;
+      if(bulk) cell.setAttribute('aria-pressed',String(this.sales.has(entry.item.id)));
+      cell.classList.toggle('is-selected',Boolean(entry && (bulk&&this.sales.has(entry.item.id) || JSON.stringify(entry.request)===JSON.stringify(this.selected))));
+    }
+    if (this.sales.size) {
+      const items=[...this.sales.values()].sort((a,b)=>a.bag-b.bag);
+      const bulk=quoteService(this.player.character,this.npc,this.player.level,{type:'storeMany',items,tab:this.storageTab,includeActiveCharms:true});
+      button.textContent=`Store ${items.length} in tab ${this.storageTab+1}`;
+      if(!bulk.ok){message.textContent=bulk.message;return;}
+      this.quote=bulk.quote; button.disabled=false;
+      message.textContent=`${items.length} ${items.length===1?'item':'items'} selected`;
+      return;
     }
     if (!this.selected) return;
     const result=quoteService(this.player.character,this.npc,this.player.level,this.selected);
@@ -261,9 +283,9 @@ export class ServicePanel {
   }
   private rarityControls(): string {
     return `<div class="service-rarities" aria-label="Select items by rarity">${(['common','magic','rare','epic','legendary'] as ItemTier[]).map(tier=>{
-      const items=bulkSaleItems(this.player.character,this.player.level,this.includeActiveCharms).filter(item=>item.tier===tier);
+      const items=this.bulkEligible().filter(item=>item.tier===tier);
       const selected=items.length>0&&items.every(item=>this.sales.has(item.id));
-      return `<button type="button" data-sell-tier="${tier}" aria-pressed="${selected}" ${items.length?'':'disabled'} style="--rarity-color:${TIER_COLORS[tier]}">${TIER_NAMES[tier]} <small>${items.length}</small></button>`;
+      return `<button type="button" data-bulk-tier="${tier}" aria-pressed="${selected}" ${items.length?'':'disabled'} style="--rarity-color:${TIER_COLORS[tier]}">${TIER_NAMES[tier]} <small>${items.length}</small></button>`;
     }).join('')}<label class="service-include-charms"><input type="checkbox" data-include-charms ${this.includeActiveCharms?'checked':''}> Include active charms</label></div>`;
   }
   /** Mirror the carried pack; empty space and overflow retain their actual positions. */
@@ -345,7 +367,7 @@ export class ServicePanel {
     if (button.dataset.storageTab !== undefined) {
       const tab=Number(button.dataset.storageTab);
       if (!Number.isInteger(tab)||tab<0||tab>=MAX_STORAGE_TABS||tab>storageTabCount(this.player.character)) return;
-      this.storageTab=tab; this.selected=null; this.quote=null; this.render();
+      this.storageTab=tab; this.selected=null; this.quote=null; this.sales.clear(); this.render();
       this.element.querySelector<HTMLElement>(`[data-storage-tab="${tab}"]`)?.focus({preventScroll:true});
       return;
     }
@@ -367,9 +389,9 @@ export class ServicePanel {
     }
     if(button.hasAttribute('data-clear-sales')) { this.sales.clear(); this.render(); return; }
     if(button.hasAttribute('data-include-charms')) { this.includeActiveCharms=(button as unknown as HTMLInputElement).checked; this.sales.clear(); this.render(); return; }
-    if(button.dataset.sellTier) {
-      const eligible=new Set(bulkSaleItems(this.player.character,this.player.level,this.includeActiveCharms).map(i=>i.id));
-      const items=this.player.character.inventory.flatMap((item,bag)=>item&&eligible.has(item.id)&&item.tier===button.dataset.sellTier?[{item,bag}]:[]);
+    if(button.dataset.bulkTier) {
+      const eligible=new Set(this.bulkEligible().map(i=>i.id));
+      const items=this.player.character.inventory.flatMap((item,bag)=>item&&eligible.has(item.id)&&item.tier===button.dataset.bulkTier?[{item,bag}]:[]);
       const remove=items.every(({item})=>this.sales.has(item.id));
       for(const {item,bag} of items) { if(remove)this.sales.delete(item.id); else this.sales.set(item.id,{bag,id:item.id,revision:item.recipe.revision}); }
       this.render(); return;
@@ -384,14 +406,15 @@ export class ServicePanel {
       if(this.sellable && bagCell && value.item.locked){this.element.querySelector('.service-message')!.textContent='Unlock this item in your inventory before selling it.';return;}
       // Shift-click still sells one item outright, but never past a selection it would ignore.
       if(this.sellable && bagCell && e.shiftKey && this.tab !== 'sell' && this.sales.size === 0) { this.selected = value.request; this.renderDetail(); this.confirm(); return; }
-      if(this.sellable && bagCell && value.source && 'bag' in value.source) {
+      if(this.bulkTarget && bagCell && value.source && 'bag' in value.source) {
+        if(this.bulkTarget==='store') this.selected=null;
         if(this.sales.has(value.item.id)) this.sales.delete(value.item.id);
         else this.sales.set(value.item.id,{bag:value.source.bag,id:value.item.id,revision:value.item.recipe.revision});
         this.renderDetail(); this.syncRarities();
         if(!button.isConnected)this.element.querySelector<HTMLElement>(`.service-grid [data-item="bag:${value.source.bag}"]`)?.focus({preventScroll:true});
         return;
       }
-      this.selected = value.request;
+      this.selected = value.request; if(this.bulkTarget==='store') this.sales.clear();
       if (value.source && 'equipped' in value.source && this.tab !== 'improve') { this.tab = 'improve'; this.render(); }
       else this.renderDetail();
       if (e.shiftKey && this.tab !== 'improve') this.confirm();
@@ -446,8 +469,8 @@ export class ServicePanel {
     }
   }
   private syncRarities(): void {
-    for(const button of this.element.querySelectorAll<HTMLButtonElement>('[data-sell-tier]')) {
-      const items=bulkSaleItems(this.player.character,this.player.level,this.includeActiveCharms).filter(item=>item.tier===button.dataset.sellTier);
+    for(const button of this.element.querySelectorAll<HTMLButtonElement>('[data-bulk-tier]')) {
+      const items=this.bulkEligible().filter(item=>item.tier===button.dataset.bulkTier);
       button.setAttribute('aria-pressed',String(items.length>0&&items.every(item=>this.sales.has(item!.id))));
     }
   }
