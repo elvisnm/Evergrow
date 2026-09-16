@@ -2,7 +2,7 @@ import { INVENTORY_CELLS, PACK_CELLS, resolvePackLayout, findPackSpace, packOccu
 import { SKILL_STATS, type SkillStat } from './equipment-affix-content.ts';
 import type { SkillId } from './character-types.ts';
 import type { CharacterSheet, Item } from './character-types.ts';
-import { planEquipmentChange, type EquipmentTarget } from './inventory.ts';
+import { planEquipmentPreview, type EquipmentTarget } from './inventory.ts';
 import { deriveCharacterStats } from './character-stats.ts';
 import { getTreeBonuses } from './skill-tree.ts';
 import { deriveAttackStats, UNARMED_WEAPON } from './equipment.ts';
@@ -40,14 +40,14 @@ export function previewEquipmentChange(sheet: CharacterSheet, item: Item, level:
     if(source===undefined && inventory.some(i=>i?.id===item.id))return {ok:false as const,message:'This item is already owned.'};
     const active=inventoryLayout[item.id]>=PACK_CELLS;
     if(source!==undefined)inventory[source]=null;
-    const cell=active?inventoryLayout[item.id]:findPackSpace(item,packOccupancy(inventory,inventoryLayout));
+    const cell=active?inventoryLayout[item.id]:findPackSpace(item,packOccupancy(inventory,inventoryLayout),undefined,'charms');
     if(cell===null)return {ok:false as const,message:'Make room in your charm grid.'};
     const index=source??(inventory.includes(null)?inventory.indexOf(null):inventory.length);
     if(index>=INVENTORY_CELLS)return {ok:false as const,message:'Your inventory is full.'};
     inventory[index]=item;inventoryLayout[item.id]=cell;
     return {ok:true as const,slot:null,inventory,inventoryLayout,equipped:sheet.equipped,displaced:[],changes:compareCharacterStats(sheet,{...sheet,inventory,inventoryLayout},level)};
   }
-  const plan = planEquipmentChange(sheet, item, level, target);
+  const plan = planEquipmentPreview(sheet, item, level, target);
   if (!plan.ok) return plan;
   return { ...plan, changes: compareCharacterStats(sheet, { ...sheet, inventory: plan.inventory, equipped: plan.equipped, inventoryLayout:plan.inventoryLayout }, level) };
 }

@@ -26,7 +26,7 @@ test('cells never cross the pack/charm boundary and reject invalid indices',()=>
   assert.equal(footprintCells(chest,INVENTORY_CELLS),null);
   assert.equal(footprintCells(chest,-1),null);
   assert.equal(footprintCells(chest,NaN),null);
-  assert.equal(footprintCells(charm,PACK_CELLS-1),null);
+  assert.deepEqual(footprintCells(charm,PACK_CELLS-1),[PACK_CELLS-1],'a stone may wait in the bag');
   assert.deepEqual(footprintCells(charm,PACK_CELLS),[PACK_CELLS]);
   assert.deepEqual(footprintCells(charm,INVENTORY_CELLS-1),[INVENTORY_CELLS-1]);
 });
@@ -42,7 +42,7 @@ test('placing and swapping uses uniform cells, preserves records and rejects inv
   const snapshot=structuredClone(s);
   assert.equal(planInventoryMove(s,2,PACK_CELLS),null,'equipment never enters the charm grid');
   assert.equal(moveInventoryItem(s,2,PACK_CELLS).ok,false);
-  assert.equal(moveInventoryItem(s,3,0).ok,false,'a stone never leaves the charm grid');
+  assert.notEqual(planInventoryMove(s,3,PACK_CELLS),null,'a bagged stone may enter the charm grid');
   assert.equal(moveInventoryItem(s,2,INVENTORY_CELLS).ok,false);
   assert.deepEqual(s,snapshot);
 });

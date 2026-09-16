@@ -1,21 +1,43 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ControlBindings } from '../src/control-bindings.ts';
 import { GameInput } from '../src/game-input.ts';
 import { getHUDLayout } from '../src/hud.ts';
 import { getMinimapRect } from '../src/map-view.ts';
-import { isGameUIPoint } from '../src/ui-hit-test.ts';
+import { Simulation, FIXED_STEP } from '../src/simulation.ts';
+import { isGameUIPoint, isUIRectPoint, projectUIRect } from '../src/ui-hit-test.ts';
 
 const aim = { x: -41, y: 22 };
+
+test('Tab retains held mouse attacks and skills without replaying released taps', () => {
+  const input = new GameInput();
+  input.keyDown('KeyW'); input.pointerDown(0); input.pointerDown(2); input.keyDown('Space'); input.keyDown('KeyQ');
+  input.clear(true);
+  for (let frame = 0; frame < 10; frame++) {
+    const state = input.consume(aim, false);
+    assert.equal(state.attack, true); assert.equal(state.moveY, -1);
+    assert.equal(state.dodge, false); assert.equal(state.heal, false); assert.equal(state.skillSlot, 0);
+    assert.deepEqual(state.heldSkillSlots, [0]);
+  }
+  input.clear(true); assert.equal(input.consume(aim, false).attack, true, 'releasing Tab keeps an uninterrupted mouse hold');
+  input.pointerUp(0); assert.equal(input.consume(aim, false).attack, false);
+  input.pointerDown(0); input.pointerUp(0); input.clear(true);
+  assert.equal(input.consume(aim, false).attack, false, 'a queued click without a held button cannot start an overlay attack');
+  input.pointerDown(0); assert.equal(input.consume(aim, false).attack, true, 'new clicks attack while the overlay is open');
+  input.pointerUp(2); input.pointerDown(2); assert.equal(input.consume(aim, false).skillSlot, 0, 'new right clicks activate the assigned skill');
+  input.clear();
+  assert.equal(input.consume(aim, false).attack, false, 'pause, focus loss and M conversion stop the carried attack');
+});
 
 test('a press and release between frames retains one action edge, while held basic attack repeats', () => {
   const input = new GameInput();
   input.pointerDown(0); input.pointerUp(0);
   input.keyDown('Space'); input.keyUp('Space'); input.keyDown('KeyQ'); input.keyUp('KeyQ');
   assert.deepEqual(input.consume(aim, false), {
-    moveX: 0, moveY: 0, aimX: -41, aimY: 22, attack: true, dodge: true, heal: true, skillSlot: null,
+    moveX: 0, moveY: 0, aimX: -41, aimY: 22, attack: true, dodge: true, heal: true, skillSlot: null, heldSkillSlots: [],
   });
   assert.deepEqual(input.consume(aim, false), {
-    moveX: 0, moveY: 0, aimX: -41, aimY: 22, attack: false, dodge: false, heal: false, skillSlot: null,
+    moveX: 0, moveY: 0, aimX: -41, aimY: 22, attack: false, dodge: false, heal: false, skillSlot: null, heldSkillSlots: [],
   });
   input.pointerDown(0);
   for (let frame = 0; frame < 10; frame++) {
@@ -68,7 +90,7 @@ test('focus loss and phase changes clear every held and pending action', () => {
   for (const code of ['KeyD', 'KeyW', 'Space', 'KeyQ']) input.keyDown(code);
   input.pointerDown(0); input.pointerDown(2); input.clear(); input.clear();
   assert.deepEqual(input.consume(aim, false), {
-    moveX: 0, moveY: 0, aimX: -41, aimY: 22, attack: false, dodge: false, heal: false, skillSlot: null,
+    moveX: 0, moveY: 0, aimX: -41, aimY: 22, attack: false, dodge: false, heal: false, skillSlot: null, heldSkillSlots: [],
   });
 });
 
@@ -95,4 +117,65 @@ test('all UI consumers share minimap and shortcut hit regions while open world s
     assert.equal(isGameUIPoint(width / 2, height / 2, width, height), false);
     assert.equal(isGameUIPoint(hud.x - 5, hud.y, width, height), false);
   }
+});
+
+
+test('Tab preserves a rebound loot-reveal hold until release, while pause clears it', () => {
+  const bindings = new ControlBindings();
+  bindings.bind('revealLoot', 0, 'KeyL');
+  const input = new GameInput(bindings);
+  input.keyDown('KeyL');
+  input.clear(true);
+  assert.equal(input.held('revealLoot'), true);
+  input.clear(true);
+  assert.equal(input.held('revealLoot'), true);
+  input.keyUp('KeyL');
+  assert.equal(input.held('revealLoot'), false);
+  input.keyDown('KeyL'); input.clear();
+  assert.equal(input.held('revealLoot'), false);
+});
+
+
+test('captured canvas drags into the monitor clear holds and buffered combat by coordinates', () => {
+  const input = new GameInput();
+  const sim = new Simulation({ blocked: () => false, move: (x, y, dx, dy) => ({ x: x + dx, y: y + dy }) }, { spawn: false });
+  const canvas = { left: 40, top: 80, width: 1920, height: 1200 };
+  const monitor = projectUIRect({ left: 440, top: 440, width: 520, height: 360 }, canvas, 960, 600)!;
+  assert.deepEqual(monitor, { x: 200, y: 180, width: 260, height: 180 });
+  input.movePointer(640, 580, canvas, 960, 600);
+  input.pointerDown(0); input.pointerDown(2); input.keyDown('KeyW');
+  sim.player.dodgeTime = .08;
+  sim.update(FIXED_STEP, input.consume(aim, false));
+  assert.equal(sim.player.attack, null, 'the attack is buffered behind dodge recovery');
+  // Captured events still target the canvas; only the projected coordinates determine ownership.
+  assert.equal(isGameUIPoint(input.pointer.x, input.pointer.y, 960, 600, null, false, monitor), true);
+  if (input.setPointerUIBlocked(isUIRectPoint(input.pointer.x, input.pointer.y, monitor))) sim.clearInput();
+  const state = input.consume(aim, true);
+  assert.equal(state.attack, false); assert.equal(state.skillSlot, null);
+  assert.deepEqual(state.heldSkillSlots, []); assert.equal(state.moveY, 0);
+  assert.equal(input.setPointerUIBlocked(true), false, 'remaining over the panel is not another entry');
+  input.setPointerUIBlocked(false);
+  for (let i = 0; i < 20; i++) {
+    const next = input.consume(aim, false);
+    assert.equal(next.attack, false, 'leaving the panel cannot revive an old captured mouse hold');
+    sim.update(FIXED_STEP, next); assert.equal(sim.player.attack, null, 'buffered combat cannot leak after leaving');
+  }
+  input.pointerUp(0); input.pointerDown(0);
+  assert.equal(input.consume(aim, false).attack, true, 'a fresh world click still attacks');
+});
+
+test('monitor regions remain independent of navigation, visibility and panel geometry changes', () => {
+  const canvas = { left: 40, top: 80, width: 1200, height: 800 };
+  const rect = { left: 240, top: 280, width: 400, height: 200 };
+  const bounds = projectUIRect(rect, canvas, 960, 640)!;
+  for (const navigation of [true, false]) assert.equal(isGameUIPoint(200, 200, 960, 640, null, navigation, bounds), true);
+  assert.equal(isGameUIPoint(200, 200, 960, 640, null, false, null), false, 'closing removes its blocked region');
+  assert.equal(projectUIRect(null, canvas, 960, 640), null);
+  assert.equal(projectUIRect(rect, { ...canvas, width: 0 }, 960, 640), null);
+  const input = new GameInput(); input.pointerDown(0);
+  assert.equal(input.setPointerUIBlocked(false), false);
+  assert.equal(input.setPointerUIBlocked(true), true, 'opening or expanding under a stationary pointer clears its hold');
+  assert.equal(input.consume(aim, false).attack, false);
+  assert.equal(isUIRectPoint(bounds.x + bounds.width, bounds.y + bounds.height, bounds), true);
+  assert.equal(isUIRectPoint(bounds.x + bounds.width + 1, bounds.y, bounds), false);
 });

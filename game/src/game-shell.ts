@@ -1,18 +1,23 @@
-import type { AudioControlActions } from './audio-controls.ts';
-import { PauseMenu } from './pause-menu.ts';
-import type { GroundLootNameplates } from './ground-loot-hover.ts';
+import { controls } from './control-preferences.ts';
+import { BuffBar } from './buff-bar.ts';
+import type { ActiveBuff } from './active-buffs.ts';
+import { PauseMenu, type PauseActions } from './pause-menu.ts';
+import type { PauseNavigation } from './pause-navigation.ts';
+import type { GamepadInput } from './gamepad-input.ts';
 import { PORTAL_RULES } from './travel.ts';
+import { portalDestinationLabel, type PortalActionView } from './portal-destination.ts';
 import './travel-ui.css';
 import './hud-sidebar.css';
 import { GameNotifications } from './notifications.ts';
-import { getHUDLayout, HUD_MENU_SHORTCUTS } from './hud.ts';
+import { getHUDLayout } from './hud.ts';
+import { HUDShortcutMenu } from './hud-shortcut-menu.ts';
 import type { HUDRect } from './hud.ts';
 import { getMinimapRect, getPortalControlRect } from './map-view.ts';
 import type { GamePhase } from './game-phase.ts';
 import { gameMenuMarkup } from './game-menu.ts';
 import { trapDialogFocus, uiIcon } from './ui-components.ts';
 
-interface ShellActions extends AudioControlActions { groundLootNames?(): GroundLootNameplates; setGroundLootNames?(mode: GroundLootNameplates): void; openChronicle?(): void; save?(): Promise<boolean>; sound?(): void; muted?(): boolean; zoom?(factor: number): void; portal?(): void; play(): void; returnToTitle(): void | Promise<void>; openMap(): void; openCharacter(): void; openSkills(): void; openJourneys?(): void; }
+interface ShellActions extends PauseActions { lastSavedAt?(): number | undefined; saveLocation?(): 'Local' | 'Online'; shortcutMenuChanged?(): void; portal?(): void; play(): void; openMap(): void; openCharacter(): void; openSkills(): void; }
 
 /** Owns DOM presentation and its listeners; it never reads or mutates simulation state. */
 export class GameShell {
@@ -29,16 +34,42 @@ export class GameShell {
   private readonly abort = new AbortController();
   private menuAbort = new AbortController();
   private readonly actions: ShellActions;
+  readonly shortcutMenu: HUDShortcutMenu;
+  readonly buffs: BuffBar;
+  readonly targetBuffs: BuffBar;
+  private targetId: number | null = null;
+  setTargetEffects(target: { id: number; buffs: readonly ActiveBuff[]; x: number; y: number; opacity: number } | null): void {
+    if (target?.id !== this.targetId) this.targetBuffs.hide();
+    this.targetId = target?.id ?? null;
+    this.targetBuffs.update(this.controls.hidden ? [] : target?.buffs ?? []);
+    if (target) {
+      this.targetBuffs.element.style.left = `${target.x * 100}%`;
+      this.targetBuffs.element.style.top = `${target.y * 100}%`;
+      this.targetBuffs.element.style.opacity = String(target.opacity);
+    }
+  }
+  setBuffs(buffs: readonly ActiveBuff[]): void { this.buffs.update(this.controls.hidden ? [] : buffs); }
   private gamepadActive = false;
   private pauseMenu: PauseMenu | null = null;
+  private saveMessage = '';
+  private pauseNavigation: PauseNavigation = { category: 'character', focus: null };
   backInMenu(): boolean { return this.pauseMenu?.back() ?? false; }
   refreshOptions(): void { this.pauseMenu?.refresh(); }
+  updatePauseGamepad(pad: GamepadInput, now: number): void { this.pauseMenu?.updateGamepad(pad, now); }
 
   setGamepadActive(active: boolean) {
     if (active === this.gamepadActive) return;
     this.gamepadActive = active;
+    this.refreshBindings();
+  }
+
+  refreshBindings(): void {
+    this.pauseMenu?.refresh();
     const key = this.controls.querySelector('kbd');
-    if (key) key.textContent = active ? '↓' : 'P';
+    if (key) key.textContent = this.gamepadActive ? '↓' : controls.label('portal');
+    for (const action of ['map', 'portal'] as const) this.controls.querySelector(`[data-hud="${action}"]`)!.removeAttribute('aria-keyshortcuts');
+    this.shortcutMenu.refreshBindings();
+    this.pauseMenu?.refresh();
   }
 
   constructor(root: HTMLElement, actions: ShellActions) {
@@ -47,8 +78,7 @@ export class GameShell {
       <canvas id="game" tabindex="0" aria-label="Evergrow: wilderness and settlements"></canvas>
       <canvas id="game-ui" aria-hidden="true"></canvas>
       <nav id="hud-controls" class="hud-controls" aria-label="Character menus" hidden>
-        ${HUD_MENU_SHORTCUTS.map(shortcut => `<button type="button" class="hud-control" data-hud="${shortcut.id}"
-          aria-haspopup="dialog" aria-keyshortcuts="${shortcut.key}" aria-label="${shortcut.label}" data-tooltip="${shortcut.label}"></button>`).join('')}
+        <button type="button" class="hud-control" data-hud="menu" aria-haspopup="dialog" aria-label="Open character menus" data-tooltip="Character menus"></button>
         <button type="button" class="hud-control" data-hud="map" aria-label="World map" aria-keyshortcuts="M"
           aria-haspopup="dialog" data-tooltip="World map" data-tooltip-placement="left"></button>
         <button type="button" class="hud-control portal-control hud-sidebar-surface" data-hud="portal" aria-label="Town portal" aria-keyshortcuts="P" data-tooltip="Town portal · ${PORTAL_RULES.channel} second cast" data-tooltip-placement="left">${uiIcon('portal')}<span class="portal-label">Town portal</span><kbd class="hud-sidebar-key">P</kbd><i class="portal-progress" aria-hidden="true"></i></button>
@@ -70,14 +100,21 @@ export class GameShell {
     this.controls = root.querySelector<HTMLElement>('#hud-controls')!;
     this.status = root.querySelector<HTMLElement>('#state-description')!;
     this.notifications = new GameNotifications(this.element);
+    this.buffs = new BuffBar(this.controls);
+    this.targetBuffs = new BuffBar(this.controls, 'Target effects');
+    this.targetBuffs.element.classList.add('target-buff-bar');
     const signal = this.abort.signal;
     this.element.addEventListener('contextmenu', event => event.preventDefault(), { signal });
     this.controls.querySelector('[data-hud="map"]')!.addEventListener('click', actions.openMap, { signal });
     this.controls.querySelector<HTMLButtonElement>('[data-hud="portal"]')!.disabled = !actions.portal;
     this.controls.querySelector('[data-hud="portal"]')!.addEventListener('click', () => actions.portal?.(), { signal });
-    for (const id of ['character', 'inventory']) this.controls.querySelector(`[data-hud="${id}"]`)!.addEventListener('click', actions.openCharacter, { signal });
-    this.controls.querySelector('[data-hud="skilltree"]')!.addEventListener('click', actions.openSkills, { signal });
-    this.controls.querySelector('[data-hud="journal"]')!.addEventListener('click', () => actions.openJourneys?.(), { signal });
+    this.shortcutMenu = new HUDShortcutMenu(this.controls, this.controls.querySelector('[data-hud="menu"]')!, id => {
+      if (id === 'character' || id === 'inventory') actions.openCharacter();
+      else if (id === 'skilltree') actions.openSkills();
+      else if (id === 'map') actions.openMap();
+      else actions.openJourneys?.();
+    }, () => actions.shortcutMenuChanged?.());
+    this.refreshBindings();
   }
 
   private navigationVisible = true;
@@ -94,19 +131,25 @@ export class GameShell {
       button.style.left = `${rect.x / width * 100}%`; button.style.top = `${rect.y / height * 100}%`;
       button.style.width = `${rect.width / width * 100}%`; button.style.height = `${rect.height / height * 100}%`;
     };
-    for (const shortcut of getHUDLayout(width, height).shortcuts) place(shortcut.id, shortcut);
+    const hud = getHUDLayout(width, height);
+    this.buffs.element.style.bottom = `${(height - hud.y + 8) / height * 100}%`;
+    for (const shortcut of hud.shortcuts) place(shortcut.id, shortcut);
     place('map', getMinimapRect(width, height));
     place('portal', getPortalControlRect(width, height));
+    this.shortcutMenu.position();
   }
 
-  setPortalState(progress: number | null, returning: boolean): void {
+  setPortalState(view: PortalActionView): void {
+    const { progress, mode, destination } = view;
+    const destinationLabel = portalDestinationLabel(destination);
     const button = this.controls.querySelector<HTMLElement>('[data-hud="portal"]')!;
-    button.classList.toggle('is-channeling', progress !== null); button.classList.toggle('is-return', returning);
+    button.classList.toggle('is-channeling', progress !== null); button.classList.toggle('is-return', mode === 'locate' || mode === 'return');
+    button.toggleAttribute('disabled', mode === 'unavailable');
     button.style.setProperty('--portal-progress', `${(progress ?? 0) * 100}%`);
-    const label = progress !== null ? `Casting · ${(PORTAL_RULES.channel * (1 - progress)).toFixed(1)}s` : returning ? 'Return portal' : 'Town portal';
+    const label = progress !== null ? `Opening · ${(PORTAL_RULES.channel * (1 - progress)).toFixed(1)}s` : mode === 'return' ? 'Return portal' : mode === 'locate' ? 'Locate portal' : mode === 'unavailable' ? 'Portal unavailable' : 'Town portal';
     const text = button.querySelector('.portal-label')!; if (text.textContent !== label) text.textContent = label;
-    button.setAttribute('aria-label', progress !== null ? 'Cancel town portal' : returning ? 'Locate return portal' : 'Town portal');
-    button.dataset.tooltip = progress !== null ? 'Cancel cast' : returning ? 'Locate your return portal' : `Town portal · ${PORTAL_RULES.channel} second cast`;
+    button.setAttribute('aria-label', progress !== null ? `Cancel portal opening to ${destinationLabel}` : mode === 'return' ? `Return to ${destinationLabel}` : mode === 'locate' ? `Locate return portal to ${destinationLabel}` : mode === 'unavailable' ? 'Town portal unavailable in sanctuary. Explore outside the sanctuary to open one' : `Open town portal to ${destinationLabel}`);
+    button.dataset.tooltip = progress !== null ? `Cancel cast to ${destinationLabel}` : mode === 'return' ? `Return to ${destinationLabel}` : mode === 'locate' ? `Locate return portal · ${destinationLabel}` : mode === 'unavailable' ? 'Explore outside the sanctuary to open a town portal' : `Town portal to ${destinationLabel} · ${PORTAL_RULES.channel} second cast`;
   }
   portalTransition(): void {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -115,21 +158,42 @@ export class GameShell {
     this.element.append(veil); veil.addEventListener('animationend', () => veil.remove(), { once: true });
   }
 
-  setSaveStatus(message: string, failed = false): void {
-    const status = this.overlay.querySelector('.menu-save-state'); if (status) status.textContent = message;
+  setSaveStatus(message = '', failed = false): void {
+    this.saveMessage = message;
+    this.refreshSaveStatus();
     const warning = this.element.querySelector<HTMLElement>('#save-warning')!;
     warning.hidden = !failed;
     if (warning.textContent !== message) warning.textContent = message;
   }
 
+  private refreshSaveStatus(): void {
+    const status = this.overlay.querySelector<HTMLElement>('.menu-save-state');
+    if (!status) return;
+    const timestamp = this.actions.lastSavedAt?.();
+    const saved = timestamp === undefined ? null : new Date(timestamp);
+    if (!saved || !Number.isFinite(saved.getTime())) {
+      status.textContent = this.saveMessage || 'Not saved yet.'; status.removeAttribute('title'); return;
+    }
+    const today = saved.toDateString() === new Date().toDateString();
+    const clock = saved.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const location = this.actions.saveLocation?.() ?? 'Local';
+    const lastSave = `Last saved ${today ? clock : `${saved.toLocaleDateString()} · ${clock}`} (${location})`;
+    status.textContent = this.saveMessage ? `${lastSave} · ${this.saveMessage}` : lastSave;
+    status.title = `Last saved ${saved.toLocaleString()} (${location})`;
+  }
+
   setStatus(message: string): void { this.status.textContent = message; }
 
   showMenu(phase: GamePhase, kills: number, time: number, location = 'Deadwood'): void {
+    this.shortcutMenu.close(false);
     this.menuAbort.abort(); this.menuAbort = new AbortController(); this.pauseMenu = null;
     const playing = phase === 'playing';
+    if (playing || phase === 'ready' || phase === 'dead') this.pauseNavigation.focus = null;
+    if (phase === 'ready') this.pauseNavigation.category = 'character';
     const panel = phase === 'map' || phase === 'character' || phase === 'skills' || phase === 'service' || phase === 'event' || phase === 'journeys' || phase === 'chronicle';
     this.overlay.hidden = playing || panel || phase === 'ready';
     this.controls.hidden = !playing;
+    if (!playing) { this.buffs.hide(); this.targetBuffs.hide(); }
     this.element.classList.toggle('playing', playing);
     if (playing || panel || phase === 'ready') {
       this.overlay.innerHTML = '';
@@ -138,18 +202,22 @@ export class GameShell {
     }
     const dead = phase === 'dead';
     this.overlay.innerHTML = gameMenuMarkup(phase, kills, time, location);
+    this.refreshSaveStatus();
     const signal = this.menuAbort.signal;
     const play = this.overlay.querySelector<HTMLButtonElement>('#play-action')!;
     play.addEventListener('click', this.actions.play, { signal });
     if (dead) this.overlay.querySelector('#title-action')?.addEventListener('click', this.actions.returnToTitle, { signal });
     this.overlay.querySelector('#close-menu')?.addEventListener('click', this.actions.play, { signal });
-    if (!dead) this.pauseMenu = new PauseMenu(this.overlay, this.actions, signal);
+    if (!dead) this.pauseMenu = new PauseMenu(this.overlay, this.actions, signal, this.pauseNavigation);
     trapDialogFocus(this.overlay, { signal, initialFocus: play, restoreFocus: false });
+    this.pauseMenu?.restoreFocus();
     this.setStatus(dead ? `You fell after defeating ${kills} enemies.`
       : phase === 'paused' ? 'Game paused.' : 'Ready to enter Deadwood.');
   }
 
   dispose(): void {
+    this.buffs.dispose(); this.targetBuffs.dispose();
+    this.shortcutMenu.dispose();
     this.notifications.dispose();
     this.menuAbort.abort(); this.abort.abort();
   }

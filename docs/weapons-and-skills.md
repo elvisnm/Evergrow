@@ -1,8 +1,12 @@
 # Weapons and skills
 
+Local Unique equipment adds six equipped skill powers while preserving unlocks and Techniques. See [Unique items](unique-items.md) for the complete rules, fixed affixes and combat limits.
+
 2026-09-06 · current local prototype catalog.
 
 Weapons supply the basic attack immediately. LMB swings a melee weapon, fires an arrow from a bow, or releases an elemental bolt from a staff or wand. The five active slots remain empty on a new run; major tree nodes unlock skills for assignment to RMB and 1–4. Melee/bow basic attacks cost no mana; staff bolts cost 4 base mana and wand bolts cost 2, reduced by mana efficiency. Potion and dodge keep their separate Q and Space shortcuts.
+
+When an otherwise eligible basic attack or assigned skill fails its mana check, a subtle blue **Not Enough Mana** cue appears above the player for 1.15 seconds. Its 11px lettering has a soft glow, briefly fades in, and drifts upward with eased motion while smoothly fading away. It follows the player and stays at native text size across camera zoom. Held or repeated attempts share one cue at a time; reduced motion removes the rise. Empty slots, incompatible gear and cooldowns do not trigger it. This feedback does not change costs, action timing or saves.
 
 ## Weapon profiles
 
@@ -26,7 +30,7 @@ Weapons supply the basic attack immediately. LMB swings a melee weapon, fires an
 | Cinder Wand | `cinder-wand` | 1 | 16 | 1.92 | 440 | Fire bolt |
 | Hoarfrost Wand | `hoarfrost-wand` | 1 | 14 | 2.08 | 420 | Frost bolt |
 | Spark Wand | `spark-wand` | 1 | 11 | 2.48 | 460 | Lightning bolt |
-| Star Wand | `star-wand` | 1 | 17 | 1.84 | 450 | Arcane bolt |
+| Star Wand | `star-wand` | 1 | 17 | 1.84 | 450 | Radiant bolt (Arcane) |
 | Weathered Sword — starter | `weathered-sword` | 2 | 24 | 1.6 | 60 | Physical swing |
 | Unarmed — empty main hand | `unarmed` | 1 | 5 | 1.44 | 24 | Physical strike |
 
@@ -39,6 +43,8 @@ Physical melee attacks and arrows use `attackDamageMultiplier`; staff and wand b
 Local challenge tuning (2026-09-11): Arc Lightning heals full life-on-hit on its first contact, 25% on each additional distinct target and none on revisits within that cast. Single-target recovery, mana costs and damage are unchanged. Veterans/elites/bosses now share bounded control durations and a protected recovery window across melee stagger, lightning, stun and freeze. Ordinary foes remain controllable. See [combat power audit](combat-power-audit.md).
 
 ## Caster off-hands
+
+Fire Staff uses a single lead-hand grip with its free arm hanging beside the upper thigh with a soft elbow bend during idle, movement and casting. The shared world/portrait pose retains its upright shaft and grounded base. This is a visual carry change only; the staff still reserves both equipment slots. Frost and Lightning staves retain their supporting-hand grip.
 
 `focus-content.ts` owns six focus profiles, each with normal generated names, rarity, materials, affixes, enhancement and releveling. All occupy the offhand slot. Their base implicits are:
 
@@ -73,31 +79,19 @@ Equipping a two-handed weapon stows any offhand item; equipping an offhand stows
 
 New characters choose Sword (Weathered Sword), Bow (Thorn Shortbow) or Fire Staff (Ember Staff). They share neutral worn leather armor and 64 empty inventory cells; no test items are granted.
 
-## Skill schools and requirements
+## Skill territories and requirements
 
-The atlas contains **2,182 nodes**, **2,923 connections**, **150 passive constellations plus 23 development groups**, and **20 skill majors**. Nine schools branch from the central Might, Cunning, and Arcana arteries. A school's first skill costs three points along its shortest origin route; its advanced skill costs four total. The dagger school currently has one skill. Crosslinks allow movement between specialties and disciplines.
-
-| Domain | School | First skill — 3 points | Advanced skill — 4 total points |
-| --- | --- | --- | --- |
-| Might | Way of the Blade | Crescent Cleave | Rift Lunge |
-| Might | Way of the Colossus | Whirlwind | Earthshatter |
-| Might | Way of the Sentinel | Shield Bash | Bulwark |
-| Cunning | Way of the Marksman | Thorn Volley | Piercing Shot |
-| Cunning | Way of the Ranger | Ricochet | Rain of Arrows |
-| Cunning | Way of the Dagger | Backstab | — |
-| Arcana | Way of the Pyromancer | Fireball | Meteor |
-| Arcana | Way of the Winter Star | Ice Nova | Frost Lance |
-| Arcana | Way of the Stormcaller | Arc Lightning | Soul Siphon |
+The local atlas has 875 nodes, 932 connections, 90 passive specialties, 30 skill groups and six territories. Origin route costs vary from 2 to 33 points. See [skill progression](skill-progression.md#unlock-pacing-and-assignments) for the complete unlock table and the six new movement, defensive and ultimate actions.
 
 Each skill requires allocation, an assigned slot, suitable equipment, enough mana, and a ready cooldown. Gear changes retain assignments, but incompatible slots cannot activate. Cooldowns belong to skill IDs and survive reassignment. The UI and combat consume the same requirement and cost metadata.
 
 ## Skill development
 
-Skills now support purchased ranks, optional lower casting ranks, deeper specializations, mastery and three Arcana ultimates. See [skill progression](skill-progression.md) for implemented formulas, choices and the full ultimate catalog.
+Skills now support twenty purchased ranks, optional lower casting ranks, 90 direct Techniques, eight Doctrine families, four keystones and seven ultimates. See [skill progression](skill-progression.md) for implemented formulas, choices and the full ultimate catalog.
 
 ## Active skill catalog
 
-First-row skills have no cooldown; the eight second-row skills cost 24–40 base mana and retain cooldowns. All tiers respect action recovery. Costs and cooldowns below are rank-1 authored bases; mana-cost reduction and cooldown reduction independently change their effective values. Mana reduction adds across gear and tree, caps at 75%, and costs round to tenths with a minimum of one mana. Damage potency multiplies the selected compatible weapon’s derived hit. “Melee” means sword, axe, mace, or dagger; “blade” means sword, axe, or dagger. Heavy skills accept an axe or mace of either handedness.
+Repeatable basic skills have no cooldown; advanced and ultimate actions retain individual cooldowns. All tiers respect action recovery. Costs and cooldowns below are rank-1 authored bases; mana-cost reduction and cooldown reduction independently change their effective values. Mana reduction adds across gear and tree, tapers after 20% toward 40%, and costs round to tenths with a minimum of one mana. Damage potency multiplies the selected compatible weapon’s derived hit. “Melee” means sword, axe, mace, or dagger; “blade” means sword, axe, or dagger. Heavy skills accept an axe or mace of either handedness.
 
 | Skill | Requirement | Mana | Cooldown | Potency | Effect |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -136,6 +130,8 @@ See [character systems](character-systems.md) for item tiers, point rewards, sta
 ## Action speed and efficiency
 
 Melee and bows use attack speed. Staff innate bolts and staff-or-wand-required spells use cast speed, independently of attack speed. Action duration is the reciprocal of the compatible weapon's effective actions per second (bounded to 0.25–12). Sweeps and casting recovery snapshot that duration; changing gear cannot shorten an action already underway. Dash travel retains its authored duration, while action recovery lasts at least that long. Casting poses, charging lights and dodge-cancel timing use the same snapshotted duration. Cooldown begins at activation and is separate from recovery.
+
+A deliberate skill press queues one next action through the current attack, cast, dash or dodge recovery, with 110 ms of grace afterward. A newer press replaces it; held basic attacks, right-click repeats and Whirlwind channel repeats cannot overwrite it. Movement continues during casting. The queue does not wait through a longer skill cooldown or mana shortage, and pause, focus changes and UI combat blocking clear it. Meteor and Cataclysm retain their separate, telegraphed impact delays after activation.
 
 Gear can roll Invocation (cast speed) and Efficiency (mana-cost reduction), with bounded percentage scaling. Inner Flame nodes grant cast speed; Battle Rhythm, Keen Pursuit and Quiet Current grant mana efficiency. Existing cooldown-reduction gear and nodes affect the second-row skills; a zero cooldown stays zero. Character statistics show both speed bonuses and mana-cost reduction. HUD affordability and atlas costs use the actual derived values.
 
@@ -200,3 +196,30 @@ Instant skills retain immediate contact/release and begin their pose at that con
 Critical chance/multiplier and life on hit now travel with attacks, dashes, projectiles and delayed direct-damage pulses. Equipment changes after acceptance cannot rewrite these offensive values. Periodic burns still cannot crit or trigger life on hit. Shield skills continue to derive damage and cadence from the held main weapon, including wand + shield; this existing hybrid rule is retained.
 
 The code audit fixes are covered by headless regression tests. No automated gameplay, browser visual acceptance or listening test was performed; the user owns combat-feel and visual testing. This pass preserves saves and introduces no progress reset.
+
+
+## Radiant wand basics · local September 14, 2026
+
+Wand & Grimoire now starts with **Star Wand + Astral Grimoire**. The Star Wand fires a narrow ivory-gold light dart with two short ribbons, etched wake fragments, a tip-anchored release seal and a brief star/seal impact. Its held crystal and the Astral Grimoire share restrained warm light; the book seal brightens with the snapshotted casting action. The existing wood, leather and brass geometry, world lighting and fixed CRT treatment remain authoritative. A short chime replaces the generic basic-cast rush. Radiant flight has no continuous particle emitter; release/impact effects share the existing bounded budgets, and reduced motion freezes decorative drift/expansion.
+
+Radiant is a **projectile presentation mapped to Arcane damage**, like Spirit. There is no new resistance, affix, healing, blind or status effect. Star Wand retains 17 base damage, 1.84 base actions/second, 450 reach and two base mana per bolt. Astral Grimoire retains +12 mana and +3% cooldown reduction at its authored base. This starter replaces the Cinder Wand's fire/burn and Ember Codex's mana regeneration with direct Arcane hits and cooldown support. Before character bonuses, Star Wand deals 31.28 direct damage/second; Cinder Wand deals 30.72 direct damage/second plus its non-stacking burn. These existing profile values are the first playtest baseline, not a promise of equal sustained output.
+
+`basicProjectileStyle` selects the basic's style from the acting weapon; the action and projectile retain it after gear changes. Star Wand works in either hand and needs no grimoire to fire radiant bolts. Fire/frost/lightning wands retain their elements. Assigned spells retain their authored effects, including Fireball's fire and burning. Resistance mapping, elemental hit accounting and Elemental Resonance treat radiant as Arcane; critical hits and Spellweave retain their ordinary rules.
+
+No save format change or progress reset. Existing Star Wands and ordinary Astral Grimoires receive the new art on presentation; owned Cinder Wands and Ember Codices remain fire equipment. The Broken Seal retains its authored Unique violet glow and original seal core, without the ordinary grimoire's radiant casting seal. New characters receive the revised starter pairing. Normal generation, trading and improvement recipes are unchanged. `/weapon-lights.html?sample=5&attack=0.42` stages the radiant pairing with the shared runtime art and basic-style resolver in disposable memory.
+
+## Arc Lightning travel — September 15, 2026
+
+Arc Lightning now releases a sequential traveling chain instead of resolving the whole pack on the casting tick. Base potency is 1.25× weapon spell damage (previously 1.4×, about 11% less); mana, recovery, target count and per-jump falloff are unchanged. Each flight takes 55 ms plus distance / 1,400, bounded to 90–300 ms. Damage and life on hit happen on arrival, with offense snapshotted at cast. The next living, visible on-screen target is chosen from the current impact position. Dead targets can still conduct onward without duplicate damage or rewards. A newly blocked line ends the chain. Storm Circuit revisits, Static Thread, Concentrated Current and Stormglass keep their existing roles.
+
+`chain-lightning.ts` owns the transient fixed-tick flights (24 simultaneous paid casts, rejected before mana payment at capacity). Death, relocation and checkpoint restoration discard them. No save payload change. `chain-lightning-art.ts` draws growing white-blue leaders, violet forked filaments, restrained sparks and arrival halos; moving tips contribute to the existing bounded scene-light budget. Reduced motion retains sequential arrival but suppresses moving debris and restless branches. Ground-container discharges and other skills retain their current hit timing.
+
+Storm Circuit tuning: eight hits with revisits retain the base 78% damage per jump, and cost 35% more mana (previously 70% retention and +70% mana). A full eight-hit chain deals about 21% more combined damage than the base five-hit chain. Travel speed and revisit healing restrictions are unchanged; Static Thread and Concentrated Current are unchanged.
+
+## Elemental spell presentation — 2026-09-15
+
+Fireball and Frost Lance now have dedicated player-skill silhouettes: a turbulent hot core and ember wake, or a faceted spear with crystal fragments. Innate bolts and enemy projectiles keep their own art. Frost Lance emits a small visual shatter at each confirmed piercing contact, without adding damage or changing its pierce budget. Ice Nova spreads branching ground frost and rising crystals; Absolute Zero uses a larger crystal crown and visible frost gathering during its existing delay. The expanding fronts are visual aftermath of confirmed hits, not a new damage delay.
+
+Meteor and Cataclysm retain their scheduled descent and staggered impacts, with gathering landing light, trailing embers, a pressure ring, flame lobes, molten cracks and ballistic stone fragments. Tempest follows its live field with an open rotating boundary; peripheral lightning and surface-light intensity read its actual pulse clock. The centre stays transparent. Reduced motion freezes orbit/trail motion and removes ballistic debris; existing spell timings, costs, damage and Techniques remain unchanged.
+
+`elemental-spell-art.ts` owns stateless bounded art, reused by projectile, ground and confirmed-impact presentation. Existing area/link retention and scene-light caps are unchanged. Particles are derived from a fixed number of samples rather than accumulated emitters. Spell playground previews continue to use the runtime renderers.

@@ -1,8 +1,9 @@
+import { executeCharacterCommand } from '../src/character-commands.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation, FIXED_STEP } from '../src/simulation.ts';
 import { addInventoryItem } from '../src/inventory.ts';
-import { PACK_CELLS, PACK_COLUMNS, CHARM_ROWS, activeCharms, resolvePackLayout } from '../src/inventory-grid.ts';
+import { PACK_CELLS, activeCharms, resolvePackLayout } from '../src/inventory-grid.ts';
 import { deriveItem, generateItem } from '../src/items.ts';
 import { GROUND_PICKUP_RANGE } from '../src/ground-item-pickup.ts';
 import type { Input, WorldQuery } from '../src/model.ts';
@@ -81,18 +82,22 @@ test('pickup routes around obstacles and gives up when no route exists',()=>{
 });
 
 
-test('charm pickup updates bonuses immediately without healing and a full charm grid preserves loot',()=>{
+test('charm pickup is inactive until moved; a full bag preserves ground loot',()=>{
   const sim=setup(open,0);
   let charm=generateItem(771,1,'charm','amber-pebble','common');
   charm.affixes[0]={name:'Prosperity',stat:'goldFindPercent',value:0};charm=deriveItem(charm);
   sim.groundItems[0].item=charm;
   const hp=sim.player.hp,mana=sim.player.mana;
   assert.equal(sim.requestGroundItem(901),null);advance(sim,FIXED_STEP);
-  assert.equal(sim.groundItems.length,0);assert.equal(activeCharms(sim.player.character,1).length,1);
-  assert.ok(resolvePackLayout(sim.player.character)[charm.id]>=PACK_CELLS);
+  assert.equal(sim.groundItems.length,0);assert.equal(activeCharms(sim.player.character,1).length,0);
+  assert.ok(resolvePackLayout(sim.player.character)[charm.id]<PACK_CELLS);
+  assert.equal(sim.player.derived.goldFindMultiplier,1);
+  assert.ok(executeCharacterCommand(sim.player,{type:'moveItem',from:0,to:PACK_CELLS}).ok);
   assert.ok(sim.player.derived.goldFindMultiplier>1);assert.equal(sim.player.hp,hp);assert.equal(sim.player.mana,mana);
-  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS-1;i++)assert.ok(addInventoryItem(sim.player.character,generateItem(8000+i,1,'charm','jade-pebble','common')));
+  assert.ok(executeCharacterCommand(sim.player,{type:'moveItem',from:0,to:0}).ok);
+  assert.equal(sim.player.derived.goldFindMultiplier,1);
+  for(let i=0;i<PACK_CELLS-1;i++)assert.ok(addInventoryItem(sim.player.character,generateItem(8000+i,1,'charm','jade-pebble','common')));
   sim.groundItems.push({id:902,x:0,y:0,item:generateItem(9901,1,'charm','jade-pebble','common')});
-  assert.equal(sim.requestGroundItem(902),'Charm grid full. Make room for this item.');advance(sim,FIXED_STEP);
+  assert.equal(sim.requestGroundItem(902),'Bag full. Make room for this item.');advance(sim,FIXED_STEP);
   assert.equal(sim.groundItems.length,1);
 });

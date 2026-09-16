@@ -10,7 +10,7 @@ import { Simulation, FIXED_STEP } from '../src/simulation.ts';
 import { refreshCharacter } from '../src/character.ts';
 import { awardKillRewards } from '../src/combat-rewards.ts';
 import { addInventoryItem } from '../src/inventory.ts';
-import { PACK_COLUMNS, CHARM_ROWS } from '../src/inventory-grid.ts';
+import { PACK_CELLS, PACK_COLUMNS, CHARM_ROWS } from '../src/inventory-grid.ts';
 
 const world={blocked:()=>false,move:(x:number,y:number,dx:number,dy:number)=>({x:x+dx,y:y+dy})};
 test('Intelligence adds mana without regeneration and preserves level-one casting',()=>{
@@ -29,7 +29,7 @@ test('integer regeneration rolls respect stone area instead of rounding every ce
   const pebble=stone('astral-pebble',1),monolith=stone('astral-monolith',2);
   assert.equal(pebble.affixes[0].value,1);assert.ok(monolith.affixes[0].value>=8);
   const s=createCharacterSheet();s.inventory.fill(null);s.inventoryLayout={};
-  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS;i++)assert.ok(addInventoryItem(s,stone('astral-pebble',100+i)));
+  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS;i++){const item=stone('astral-pebble',100+i);assert.ok(addInventoryItem(s,item));s.inventoryLayout![item.id]=PACK_CELLS+i;}
   // A full charm grid is PACK_COLUMNS*CHARM_ROWS uniform cells; each stone adds its own .2.
   assert.equal(deriveCharacterStats(s,{},35).manaRegeneration,5.8);
   for(const i of [pebble,monolith])assert.ok(i.affixes.every(a=>Number.isInteger(a.value)));
@@ -63,5 +63,5 @@ test('item comparison keeps both regeneration columns in mana per five seconds',
   const item=generateItem(92,1,'ring','moonstone-ring','magic');
   item.implicit={};item.affixes=[{name:'Clarity',stat:'manaRegen',value:5}];
   const markup=itemTooltipMarkup(item,{sheet:createCharacterSheet(),level:1});
-  assert.match(markup,/Mana \/ 5 sec<\/th><td>\+5<\/td><td class="is-gain">\+5<\/td>/);
+  assert.match(markup.replace(/<span aria-hidden="true">[↑↓]<\/span> /g, ''),/Mana \/ 5 sec<\/th><td>\+5<\/td><td class="is-gain">\+5<\/td>/);
 });

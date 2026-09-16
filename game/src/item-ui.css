@@ -1,3 +1,4 @@
+@import './unique-power-ui.css';
 @import './tooltip-material.css';
 
 /* One item scale across the character bag and every town service. */
@@ -17,6 +18,7 @@
 .ui-item-slot[data-tier='legendary'] { --tier-wash: 42%; }
 .ui-item-slot[data-tier='rare']::before, .ui-item-slot[data-tier='epic']::before, .ui-item-slot[data-tier='legendary']::before { border-color: color-mix(in srgb, var(--item-color) 32%, transparent); border-top-width: 2px; }
 .ui-item-slot[data-tier='legendary'] { box-shadow: inset 0 0 12px #eeac632b, 0 0 8px #eeac6320; }
+.ui-item-slot[data-tier='unique'] { --tier-wash: 28%; box-shadow: inset 0 0 12px #bc548124, inset 0 -8px 18px #9567cf18; }
 .ui-item-slot[data-filled='false'] svg { color: #7b94a13c; width: 66%; height: 66%; }
 .ui-item-slot:hover { border-color: var(--item-color); background-color: #1a2b37; box-shadow: inset 0 0 14px #a9c8d110; }
 .ui-item-slot.is-dragging { opacity: .36; }
@@ -25,6 +27,10 @@
 .ui-item-level { position: absolute; bottom: 3px; right: 4px; font-family: var(--ui-font); font-size: 10px; color: #ccdde0aa; text-shadow: 0 1px #000, 1px 0 #000; pointer-events: none; }
 .ui-item-tier { position: absolute; top: 5px; left: 5px; display: flex; gap: 3px; pointer-events: none; }
 .ui-item-tier i { width: 3px; height: 3px; background: var(--item-color); transform: rotate(45deg); box-shadow: 0 0 3px #000; }
+/* One fixed-size seal fits even a one-cell wand, leaving the center for its art. */
+.ui-item-unique-seal { position: absolute; top: 4px; left: 4px; display: grid; place-items: center; width: 12px; height: 12px; color: #ef82ad; background: #151421d9; border-radius: 2px; pointer-events: none; }
+.ui-item-slot[data-tier='unique'] .ui-item-unique-seal svg { display: block; width: 10px; height: 10px; fill: #8c447751; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
+.ui-item-lock ~ .ui-item-unique-seal { top: 25px; }
 .ui-item-slot[data-tier='common'] .ui-item-tier i { background: transparent; border: 1px solid var(--item-color); box-sizing: border-box; }
 .ui-empty-item-mark { position: absolute; color: #67809129; font-size: 17px; }
 .ui-item-heading { display: flex; align-items: center; gap: 10px; padding: 0 0 11px; border-bottom: 1px solid #a5bec21c; }
@@ -102,3 +108,14 @@
 .ui-item-heading h4 .ui-greater-affix { margin-inline: .12em 0; width: .65em; height: .65em; }
 .ui-item-greater { position: absolute; top: 4px; right: 5px; pointer-events: none; line-height: 1; }
 .ui-item-greater .ui-greater-affix { width: 10px; height: 10px; margin: 0; filter: drop-shadow(0 1px 2px #081119); }
+
+/* Unique engravings use the same glass surface, with crimson and violet accents. */
+.ui-item-hover-card[data-tier="unique"] {border-color:#c782b68c;box-shadow:inset 0 0 30px #bc548112,0 0 24px #a866d516;}
+.ui-rarity-badge[data-tier="unique"] {color:#ef82ad;}
+
+.ui-item-property.ui-rift-modifier > span,.ui-item-property.ui-rift-modifier > strong{color:inherit}
+
+.ui-item-alt-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; padding: 2px 7px; margin: 4px 0 0; border-radius: 3px; border: 1px solid #96b8c32e; background: #0c182470; color: #a5bfc9; font: inherit; font-size: 11px; line-height: normal; text-align: left; transition: background 120ms, border-color 120ms, color 120ms; }
+.ui-item-alt-toggle:hover, .ui-item-alt-toggle:focus-visible { background: #182939; border-color: #96b8c366; color: #e6f2f5; outline: none; }
+.ui-item-alt-toggle kbd { display: inline-block; padding: 1px 4px; border: 1px solid #96b8c366; border-radius: 2px; background: #081119; color: #c4dbe2; font: 600 10px 'Evergrow Numerals', system-ui, sans-serif; line-height: 1.2; }
+

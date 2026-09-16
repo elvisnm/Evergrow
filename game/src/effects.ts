@@ -1,3 +1,5 @@
+import { drawRadiantSeal } from './radiant-art.ts';
+import { weaponGlowColor } from './radiant-content.ts';
 import { SkillMeleeArt } from './skill-melee-art.ts';
 import { weaponReleasePoint } from './projectile-launch.ts';
 import { PROJECTILE_HEIGHT } from './ranged-aim.ts';
@@ -10,7 +12,7 @@ import { drawGlow } from './lighting.ts';
 import type { PointLight } from './lighting.ts';
 import type { CombatEvent } from './model.ts';
 import type { Simulation } from './simulation.ts';
-import { text } from './font.ts';
+import { GAME_FONT_STACK, text } from './font.ts';
 import { SwordTrail } from './sword-trail.ts';
 import { projectileStyle, PROJECTILE_COLORS } from './projectile-art.ts';
 import { SkillEffects } from './skill-effects.ts';
@@ -20,10 +22,11 @@ interface Spark {
   z: number; vz: number; curl: number;
   life: number; max: number; size: number; color: string; luminous: boolean;
 }
-interface Flash { x: number; y: number; life: number; max: number; radius: number; color: string; ring: boolean; }
-interface Impact { x: number; y: number; angle: number; life: number; max: number; color: string; hurt: boolean; lethal: boolean; }
+interface Flash { x: number; y: number; life: number; max: number; radius: number; color: string; ring: boolean; radiant?: boolean; }
+interface Impact { x: number; y: number; angle: number; life: number; max: number; color: string; hurt: boolean; lethal: boolean; radiant?: boolean; }
 interface Popup { x: number; y: number; vx: number; vy: number; life: number; max: number; value: string; color: string; size: number; }
 const GOLD = '#ffbd63', FIRE = '#ff643b', MINT = '#54e8b8', BLUE = '#64baff';
+const MANA_WARNING_DURATION = 1.15;
 
 /** Effects never drive gameplay. All collections and continuous emitters are bounded. */
 export class CombatEffects {
@@ -31,6 +34,7 @@ export class CombatEffects {
   private flashes: Flash[] = [];
   private impacts: Impact[] = [];
   private popups: Popup[] = [];
+  private manaWarningLife = 0;
   private emitterTime = 0;
   private sword = new SwordTrail();
   private skillEffects = new SkillEffects();
@@ -38,6 +42,7 @@ export class CombatEffects {
 
   reset() {
     this.sparks = []; this.flashes = []; this.impacts = []; this.popups = [];
+    this.manaWarningLife = 0;
     this.emitterTime = 0; this.sword.reset(); this.skillEffects.reset(); this.meleeSkills.reset();
   }
 
@@ -52,6 +57,11 @@ export class CombatEffects {
 
   handleEvents(events: CombatEvent[]) {
     for (const event of events) {
+      if (event.type === 'insufficient-mana') {
+        // Buffered/held attempts share one cue; never stack or restart its fade.
+        if (this.manaWarningLife <= 0) this.manaWarningLife = MANA_WARNING_DURATION;
+        continue;
+      }
       this.skillEffects.handle(event);
       const enemyKind = 'enemyKind' in event ? event.enemyKind : undefined;
       const heavy = 'heavy' in event && event.heavy;
@@ -63,7 +73,7 @@ export class CombatEffects {
       const color = event.color ?? (event.style ? PROJECTILE_COLORS[event.style] : undefined) ?? (event.type === 'hurt' ? '#ff5e4e' : restoring || enemyCast ? MINT
         : event.type === 'dodge' ? BLUE : event.type === 'cast' ? FIRE : GOLD);
       const count = event.type === 'blast' ? 46 : event.type === 'block' ? 22 : event.type === 'hit' ? 30 : event.type === 'kill' ? 16
-        : event.type === 'hurt' ? 32 : event.type === 'cast' ? 18 : restoring ? 30
+        : event.type === 'hurt' ? 32 : event.type === 'cast' ? event.style === 'radiant' ? 6 : 18 : restoring ? 30
         : event.type === 'loot' ? 8 : event.type === 'pickup' ? 10 : event.type === 'dodge' ? 14 : 0;
       // MaterialResponses owns solid debris. Retain the short luminous contact accents here.
       for (let i = 0; i < (contact ? event.type === 'kill' ? 0 : 8 : count); i++) {
@@ -74,16 +84,24 @@ export class CombatEffects {
       const contactY = event.y - (event.type === 'hurt' ? 24 : enemyKind === 'brute' ? 25 : 18);
       if (contact) this.impacts.push({ x: event.x, y: contactY, angle: eventAngle,
         life: event.type === 'kill' ? .3 : .22, max: event.type === 'kill' ? .3 : .22,
-        color, hurt: event.type === 'hurt', lethal: event.type === 'kill' });
+        color, hurt: event.type === 'hurt', lethal: event.type === 'kill', radiant: event.style === 'radiant' });
       if (count > 5) {
         const max = restoring ? .55 : event.type === 'kill' ? .16 : .22;
         this.flashes.push({ x: event.x + (tip?.x ?? 0), y: tip ? event.y + tip.y : contact ? contactY : event.y - 10, life: max, max,
-          radius: event.type === 'kill' ? 62 : heavy ? 145 : contact ? 118 : event.type === 'loot' || event.type === 'pickup' ? 35 : 90, color,
-          ring: restoring || event.type === 'level' || event.skill === 'iceNova' });
+          radius: event.style === 'radiant' ? 58 : event.type === 'kill' ? 62 : heavy ? 145 : contact ? 118 : event.type === 'loot' || event.type === 'pickup' ? 35 : 90, color,
+          radiant: event.type === 'cast' && event.style === 'radiant', ring: restoring || event.type === 'level' || event.skill === 'iceNova' });
       }
-      if (event.type === 'hit' && event.value) this.popups.push({ x: event.x + (Math.random() - .5) * 10,
-        y: event.y - (enemyKind === 'brute' ? 54 : 44), vx: (Math.random() - .5) * 22, vy: -47,
-        life: .85, max: .85, value: String(Math.round(event.value)), color: heavy ? '#ffd177' : '#fff0c8', size: heavy ? 2.5 : 2 });
+      if (event.type === 'hit' && event.value) {
+        const reactionColor = event.reaction === 'melt' ? '#ffd177' : event.reaction === 'overload' ? '#ff77aa' : event.reaction === 'superconduct' ? '#a0d0ff' : event.reaction === 'singularity' ? '#c578ff' : event.reaction === 'combustion' ? '#ff4d79' : event.reaction === 'cascade' ? '#67e8f9' : (heavy ? '#ffd177' : '#fff0c8');
+        this.popups.push({ x: event.x + (Math.random() - .5) * 10,
+          y: event.y - (enemyKind === 'brute' ? 54 : 44), vx: (Math.random() - .5) * 22, vy: -47,
+          life: .85, max: .85, value: String(Math.round(event.value)), color: reactionColor, size: heavy ? 2.6 : 2 });
+        if (event.reaction) {
+          const tag = event.reaction.toUpperCase();
+          this.popups.push({ x: event.x, y: event.y - (enemyKind === 'brute' ? 78 : 68), vx: 0, vy: -47,
+            life: .75, max: .75, value: tag, color: reactionColor, size: 1.6 });
+        }
+      }
       if (event.type === 'hurt' || event.type === 'heal') this.popups.push({ x: event.x, y: event.y - 61,
         vx: Math.cos(eventAngle) * 14, vy: -55, life: .95, max: .95,
         value: (event.type === 'hurt' ? '-' : '+') + Math.round(event.value),
@@ -111,8 +129,9 @@ export class CombatEffects {
 
   update(sim: Simulation, dt: number) {
     if (!Number.isFinite(dt) || dt <= 0) return;
+    this.manaWarningLife = sim.player.dead ? 0 : Math.max(0, this.manaWarningLife - dt);
     this.sword.update(sim.player, dt, sim.time, sim.interpolationAlpha);
-    this.skillEffects.update(dt);
+    this.skillEffects.update(dt, sim.enemies);
     this.meleeSkills.update(sim.player, dt, sim.interpolationAlpha);
     for (const spark of this.sparks) {
       spark.life -= dt;
@@ -152,7 +171,7 @@ export class CombatEffects {
       }
       for (const shot of sim.projectiles.slice(0, 32)) {
         const style = projectileStyle(shot);
-        if (style === 'arrow') continue;
+        if (style === 'arrow' || style === 'radiant') continue;
         const color = PROJECTILE_COLORS[style];
         for (let i = 0; i < (style === 'fire' ? 2 : 1); i++) {
           this.spark(shot.x, shot.y - PROJECTILE_HEIGHT, shot.angle + Math.PI + (Math.random() - .5) * .7,
@@ -163,7 +182,7 @@ export class CombatEffects {
       if (castingWeapon?.attackKind === 'bolt' && p.castTime > (p.castDuration * SKILL_CAST_MOTION.releaseRemainingFraction)) {
         const angle = sim.time * 22, tip = getPlayerSwordTip(playerPose(p, sim.time));
         this.spark(p.x + tip.x + Math.cos(angle) * 8,
-          p.y + tip.y + Math.sin(angle) * 8, angle + Math.PI / 2, p.activeSkill ? SKILL_DEFINITIONS[p.activeSkill].color : p.equipment.mainHand.visual.glow ?? GOLD, .25, false);
+          p.y + tip.y + Math.sin(angle) * 8, angle + Math.PI / 2, p.activeSkill ? SKILL_DEFINITIONS[p.activeSkill].color : weaponGlowColor(castingWeapon.visual) ?? GOLD, .25, false);
       }
     }
     this.trim();
@@ -182,6 +201,10 @@ export class CombatEffects {
       c.globalAlpha = 1;
       const t = flash.life / flash.max;
       drawGlow(c, flash.x, flash.y, flash.radius * .5, flash.color, t * .52);
+      if (flash.radiant) {
+        c.save(); c.translate(flash.x, flash.y); c.globalAlpha = t * .6;
+        drawRadiantSeal(c, reducedMotion ? 7 : 5 + (1 - t) * 5, .8); c.restore();
+      }
       if (flash.ring) {
         c.globalAlpha = t * .65;
         c.strokeStyle = flash.color; c.lineWidth = 1 + t * 2;
@@ -190,7 +213,7 @@ export class CombatEffects {
     }
     this.skillEffects.draw(c, reducedMotion);
     this.meleeSkills.draw(c, reducedMotion);
-    for (const impact of this.impacts) this.drawImpact(c, impact);
+    for (const impact of this.impacts) this.drawImpact(c, impact, reducedMotion);
     for (const spark of this.sparks) {
       const t = Math.min(1, spark.life / spark.max * 1.8), y = spark.y - spark.z;
       c.globalCompositeOperation = spark.luminous ? 'lighter' : 'source-over';
@@ -210,8 +233,8 @@ export class CombatEffects {
     c.restore();
   }
 
-  private drawImpact(c: CanvasRenderingContext2D, impact: Impact) {
-    const t = Math.max(0, impact.life / impact.max), elapsed = 1 - t;
+  private drawImpact(c: CanvasRenderingContext2D, impact: Impact, reducedMotion: boolean) {
+    const t = Math.max(0, impact.life / impact.max), elapsed = impact.radiant && reducedMotion ? .4 : 1 - t;
     c.save(); c.translate(impact.x, impact.y); c.rotate(impact.angle);
     c.globalCompositeOperation = 'lighter';
     c.globalAlpha = Math.pow(t, 1.5);
@@ -223,12 +246,39 @@ export class CombatEffects {
     c.lineTo(0, -length * .65); c.lineTo(waist, -waist);
     c.lineTo(length, 0); c.lineTo(waist, waist);
     c.lineTo(0, length * .65); c.lineTo(-waist, waist); c.closePath(); c.fill();
+    if (impact.radiant) {
+      drawRadiantSeal(c, reducedMotion ? 16 : 11 + elapsed * 9, 1);
+      c.restore(); return;
+    }
     c.rotate(impact.hurt ? -.6 : .65);
     c.strokeStyle = impact.color; c.lineWidth = 1.3 * t;
     for (let i = 0; i < 3; i++) {
       const a = i * 2.1 + elapsed * .35, r = 11 + elapsed * (impact.hurt ? 29 : 20);
       c.beginPath(); c.ellipse(0, 0, r, r * .7, 0, a, a + .6); c.stroke();
     }
+    c.restore();
+  }
+
+  /** One player-attached cue, drawn above CRT at native text size at every zoom. */
+  drawManaWarning(c: CanvasRenderingContext2D, head: { x: number; y: number }, reducedMotion: boolean) {
+    if (this.manaWarningLife <= 0) return;
+    const elapsed = MANA_WARNING_DURATION - this.manaWarningLife;
+    const progress = Math.min(1, elapsed / MANA_WARNING_DURATION);
+    const rise = 1 - (1 - progress) ** 2;
+    const fadeIn = Math.min(1, elapsed / .08);
+    const fadeOut = Math.max(0, Math.min(1, (elapsed - .15) / (MANA_WARNING_DURATION - .15)));
+    const smooth = (t: number) => t * t * (3 - 2 * t);
+    const y = head.y - 8 - (reducedMotion ? 0 : rise * 18);
+    c.save();
+    c.globalAlpha = .85 * smooth(fadeIn) * (1 - smooth(fadeOut));
+    c.font = `400 11px ${GAME_FONT_STACK}`;
+    c.textAlign = 'center'; c.textBaseline = 'bottom';
+    c.lineJoin = 'round'; c.lineWidth = 2;
+    c.strokeStyle = '#07172e';
+    c.strokeText('Not Enough Mana', head.x, y);
+    c.shadowColor = '#3289ff'; c.shadowBlur = 6;
+    c.fillStyle = '#94d0ff';
+    c.fillText('Not Enough Mana', head.x, y);
     c.restore();
   }
 

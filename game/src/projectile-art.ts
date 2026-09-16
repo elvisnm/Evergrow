@@ -1,28 +1,42 @@
+import { drawElementalMissile } from './elemental-spell-art.ts';
+import { drawRadiantBolt } from './radiant-art.ts';
+import { RADIANT_COLORS } from './radiant-content.ts';
 import { projectilePresentation } from './projectile-launch.ts';
 import type { Projectile, ProjectileStyle } from './model.ts';
 import { drawGlow, type PointLight } from './lighting.ts';
 import { line, polygon, type Point } from './art-primitives.ts';
 
 export const PROJECTILE_COLORS: Readonly<Record<ProjectileStyle, string>> = Object.freeze({
-  arrow: '#bdcca9', fire: '#ff803c', frost: '#8ee7ff', lightning: '#b7afff', arcane: '#a894ec', spirit: '#83dfb1',
+  arrow: '#bdcca9', fire: '#ff803c', frost: '#8ee7ff', lightning: '#b7afff', arcane: '#a894ec', spirit: '#83dfb1', radiant: RADIANT_COLORS.light,
 });
 export const projectileStyle = (shot: Projectile): ProjectileStyle => shot.effects?.style ?? (shot.owner === 'enemy' ? 'spirit' : 'arcane');
 
 export function projectileLight(shot: Projectile, alpha = 1): PointLight {
   const style = projectileStyle(shot);
   return { ...projectilePresentation(shot, alpha), color: PROJECTILE_COLORS[style],
-    radius: style === 'arrow' ? 30 : style === 'fire' ? 150 : style === 'lightning' ? 130 : 105,
-    power: style === 'arrow' ? .15 : .86, shadows: style !== 'arrow' };
+    radius: style === 'arrow' ? 30 : style === 'fire' ? 150 : style === 'lightning' ? 130 : style === 'radiant' ? 82 : 105,
+    power: style === 'arrow' ? .15 : style === 'radiant' ? .62 : .86, shadows: style !== 'arrow' };
 }
 
 /** Projectile art follows the simulation's snapshotted payload, never current gear. */
-export function drawProjectile(c: CanvasRenderingContext2D, shot: Projectile, x: number, y: number, time: number): void {
+export function drawProjectile(c: CanvasRenderingContext2D, shot: Projectile, x: number, y: number, time: number, reducedMotion = false): void {
   const style = projectileStyle(shot), color = PROJECTILE_COLORS[style];
   const flicker = Math.sin(time * 21 + shot.id * 1.7), radius = Math.max(2, shot.radius);
   const wake = shot.launch ? Math.min(1, Math.max(0, shot.maxLife - shot.life) / .08) : 1;
-  if (style !== 'arrow') drawGlow(c, x, y, style === 'fire' ? 58 : 37, color, .65);
+  if (style !== 'arrow') drawGlow(c, x, y, style === 'fire' ? 58 : style === 'radiant' ? 24 : 37, color, .65);
   c.save(); c.translate(x, y); c.rotate(shot.angle);
-  if (style === 'arrow') {
+  if(shot.effects?.fissureWidth){
+    const width=shot.effects.fissureWidth;c.strokeStyle='#c4a17c';c.lineWidth=3;
+    c.beginPath();c.moveTo(-32,-width*.5);c.lineTo(-15,-width*.25);c.lineTo(-4,0);c.lineTo(-20,width*.3);c.lineTo(-27,width*.6);c.stroke();
+    for(let i=0;i<7;i++){const sy=(i/6-.5)*width*2,lag=12+(i*17%23);polygon(c,[[-lag-12,sy],[-lag+3,sy-7],[-lag+8,sy+3]],i%2?'#ad927b':'#665747');}
+    c.strokeStyle='#edcda3';c.lineWidth=1.3;c.beginPath();c.moveTo(-30,-width*.45);c.lineTo(-4,0);c.lineTo(-27,width*.55);c.stroke();
+  } else if (shot.effects?.thrownShield) {
+    const shield=shot.effects.thrownShield;
+    c.rotate(time*15);c.fillStyle=shield.base;c.strokeStyle=shield.edge;c.lineWidth=1.8;
+    c.beginPath();c.ellipse(0,0,10,13,0,0,Math.PI*2);c.fill();c.stroke();
+    c.strokeStyle=shield.trim;c.lineWidth=2;c.beginPath();c.moveTo(-7,0);c.lineTo(7,0);c.moveTo(0,-10);c.lineTo(0,10);c.stroke();
+    c.fillStyle='#e0c1f2';c.beginPath();c.arc(0,0,3,0,Math.PI*2);c.fill();
+  } else if (style === 'arrow') {
     c.globalAlpha *= .45;
     line(c, [[-42, 0], [-14, 0]], '#d5ddc2', 1.5);
     c.globalAlpha /= .45;
@@ -31,6 +45,10 @@ export function drawProjectile(c: CanvasRenderingContext2D, shot: Projectile, x:
     polygon(c, [[5, -2.4], [12, 0], [5, 2.4], [7, 0]], '#e4e7d0');
     polygon(c, [[-21, 0], [-28, -4], [-22, -3], [-16, 0]], '#92b8a5');
     polygon(c, [[-21, 0], [-28, 4], [-22, 3], [-16, 0]], '#586c69');
+  } else if (style === 'radiant') {
+    drawRadiantBolt(c, radius, wake, time + shot.id);
+  } else if (shot.owner === 'player' && (shot.skill === 'fireball' || shot.skill === 'frostLance')) {
+    drawElementalMissile(c, shot.skill === 'frostLance', shot.id, time, wake, reducedMotion);
   } else if (style === 'fire') {
     c.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 3; i++) {

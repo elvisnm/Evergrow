@@ -1,3 +1,5 @@
+import { enemyMovementMultiplier } from './enemy-modifiers.ts';
+import { decoyTarget } from './unique-combat.ts';
 import { enemyRecoveryDuration, enemyWindupDuration } from './enemy-threat.ts';
 import { projectileDamageType } from './resistance-content.ts';
 import type { DamageType } from './model.ts';
@@ -11,7 +13,10 @@ import type { CombatEvent, Enemy, Player, ProjectileEffects, WorldQuery } from '
 /** Decisions own no RNG, loot, progression, or drawing. Simulation supplies bounded world mutations. */
 export interface EnemyAIContext {
   player: Player;
+  target?: Pick<Player,'x'|'y'|'radius'|'dead'>;
+  hurtDecoy?(id:number,amount:number):void;
   enemies: readonly Enemy[];
+  neighbors?(enemy:Enemy,padding:number):readonly Enemy[];
   world: WorldQuery;
   time: number;
   trial: { campId: string; x: number; y: number; radius: number } | null;
@@ -23,16 +28,18 @@ export interface EnemyAIContext {
 }
 
 function separatedMotion(enemy: Enemy, vx: number, vy: number, context: EnemyAIContext): { vx: number; vy: number } {
-  for (const other of context.enemies) {
+  for (const other of context.neighbors?.(enemy,ENEMY_AI_RULES.separationPadding)??context.enemies) {
     if (other === enemy || other.state === 'dead') continue;
-    const dx = enemy.x - other.x, dy = enemy.y - other.y, distance = Math.hypot(dx, dy);
+    const dx = enemy.x - other.x, dy = enemy.y - other.y;
     const gap = enemy.radius + other.radius + ENEMY_AI_RULES.separationPadding;
+    if(dx*dx+dy*dy>=gap*gap)continue;
+    const distance=Math.hypot(dx,dy);
     if (distance > .01 && distance < gap) {
       const force = (gap - distance) * 5;
       vx += dx / distance * force; vy += dy / distance * force;
     }
   }
-  const maxSpeed = ENEMY_DEFINITIONS[enemy.kind].speed * goblinSpeed(enemy)
+  const maxSpeed = ENEMY_DEFINITIONS[enemy.kind].speed * goblinSpeed(enemy)*enemyMovementMultiplier(enemy)
     * (enemy.state === 'chase' ? ENEMY_AI_RULES.pursuitSpeedMultiplier : 1);
   const length = Math.hypot(vx, vy), scale = length > maxSpeed ? maxSpeed / length : 1;
   return { vx: vx * scale, vy: vy * scale };
@@ -42,7 +49,7 @@ function moveToward(enemy: Enemy, x: number, y: number, speed: number, dt: numbe
   // A flanking point may land inside scenery. Keep closing on the player instead
   // of asking navigation to reach an occupied decorative anchor.
   if (enemy.state === 'chase' && enemy.seesPlayer && context.world.blocked(x, y, enemy.radius + 1)) {
-    x = context.player.x; y = context.player.y;
+    x = (context.target??context.player).x; y = (context.target??context.player).y;
   }
   if (context.world.navigationTarget && !hasWalkableSegment(context.world, enemy.x, enemy.y, x, y, enemy.radius + 1)) { const target = context.world.navigationTarget(enemy.x,enemy.y,x,y,enemy.radius + 1); x=target.x; y=target.y; }
   const dx = x - enemy.x, dy = y - enemy.y, distance = Math.hypot(dx, dy);
@@ -50,8 +57,8 @@ function moveToward(enemy: Enemy, x: number, y: number, speed: number, dt: numbe
   // A patrol target drifts much more slowly than a hound can run. Arrive gently
   // instead of stepping past it and reversing on the next fixed tick.
   const arriving = enemy.state === 'patrol' || (enemy.state === 'chase' && !enemy.seesPlayer);
-  const approachSpeed = Math.min(speed * goblinSpeed(enemy), distance / dt,
-    arriving ? distance * ENEMY_AI_RULES.arrivalResponse : speed * goblinSpeed(enemy));
+  const approachSpeed = Math.min(speed * goblinSpeed(enemy)*enemyMovementMultiplier(enemy), distance / dt,
+    arriving ? distance * ENEMY_AI_RULES.arrivalResponse : speed * goblinSpeed(enemy)*enemyMovementMultiplier(enemy));
   const velocity = separatedMotion(enemy, dx / distance * approachSpeed, dy / distance * approachSpeed, context);
   const beforeX = enemy.x, beforeY = enemy.y;
   context.move(enemy, velocity.vx, velocity.vy, dt);
@@ -68,7 +75,7 @@ function moveToward(enemy: Enemy, x: number, y: number, speed: number, dt: numbe
 }
 
 function sense(enemy: Enemy, dt: number, context: EnemyAIContext): void {
-  const p = context.player, definition = ENEMY_DEFINITIONS[enemy.kind];
+  const p = context.target??context.player, definition = ENEMY_DEFINITIONS[enemy.kind];
   enemy.senseTime -= dt;
   const distance = Math.hypot(p.x - enemy.x, p.y - enemy.y);
   if (enemy.senseTime <= 0) {
@@ -110,7 +117,7 @@ function returnHome(enemy: Enemy, dt: number, context: EnemyAIContext): void {
 }
 
 function chase(enemy: Enemy, dt: number, context: EnemyAIContext, definition: EnemyDefinition): void {
-  const p = context.player, hasSight = enemy.seesPlayer;
+  const p = context.target??context.player, hasSight = enemy.seesPlayer;
   const pursuitSpeed = definition.speed * ENEMY_AI_RULES.pursuitSpeedMultiplier;
   const targetX = hasSight ? p.x : enemy.lastSeenX, targetY = hasSight ? p.y : enemy.lastSeenY;
   const dx = targetX - enemy.x, dy = targetY - enemy.y, distance = Math.hypot(dx, dy), angle = Math.atan2(dy, dx);
@@ -153,9 +160,11 @@ function chase(enemy: Enemy, dt: number, context: EnemyAIContext, definition: En
 
 /** Tick only a living, unstaggered actor; status/damage integration remains simulation-owned. */
 export function updateEnemyAI(enemy: Enemy, dt: number, context: EnemyAIContext): void {
+  const target=decoyTarget(enemy,context.player,context.world,context.visible);
+  const original=context;if(target!==context.player)context={...context,target,hurt:(amount,angle,actor,type)=>{if(actor.decoyTarget)original.hurtDecoy?.(actor.decoyTarget.id,amount);else original.hurt(amount,angle,actor,type);}};
   if (enemy.state === 'chase') enemy.attackVariant = enemyAttackVariant(enemy);
-  const p = context.player, definition = enemyAttackDefinition(enemy);
-  if (context.world.isSanctuary?.(p.x, p.y)) {
+  const p = context.target??context.player, definition = enemyAttackDefinition(enemy);
+  if (context.world.isSanctuary?.(context.player.x, context.player.y)) {
     if (enemy.state !== 'return') disengage(enemy);
     const distance = Math.hypot(enemy.x - p.x, enemy.y - p.y);
     if (distance < 100) {
@@ -193,7 +202,7 @@ export function updateEnemyAI(enemy: Enemy, dt: number, context: EnemyAIContext)
     if (enemy.stateTime >= enemy.stateDuration) transitionEnemy(enemy, 'chase');
   } else if (enemy.state === 'chase') chase(enemy, dt, context, definition);
   else if (enemy.state === 'windup') {
-    if (enemy.stateTime < definition.aimLock) {
+    if (!p.dead && enemy.stateTime < definition.aimLock) {
       enemy.attackAngle = Math.atan2(p.y - enemy.y, p.x - enemy.x);
       enemy.attackTargetX = p.x; enemy.attackTargetY = p.y;
     }
@@ -208,10 +217,15 @@ export function updateEnemyAI(enemy: Enemy, dt: number, context: EnemyAIContext)
       } else if (definition.attack === 'ground') {
         const tx = enemy.attackTargetX, ty = enemy.attackTargetY;
         context.emit({ type: 'blast', x: tx, y: ty, radius: definition.blastRadius, style: definition.blastStyle ?? 'frost', enemyKind: enemy.kind });
-        if (Math.hypot(p.x - tx, p.y - ty) <= definition.blastRadius + p.radius
+        if (!p.dead && Math.hypot(p.x - tx, p.y - ty) <= definition.blastRadius + p.radius
           && context.visible(enemy.x, enemy.y, tx, ty) && context.visible(tx, ty, p.x, p.y)) {
           context.hurt(enemy.attackDamage ?? enemy.damage, Math.atan2(p.y - ty, p.x - tx), enemy, projectileDamageType(definition.blastStyle ?? 'frost'));
         }
+        // The double redirects aim, but never shields the player from the same area.
+        const real=context.player;
+        if(enemy.decoyTarget&&!real.dead&&Math.hypot(real.x-tx,real.y-ty)<=definition.blastRadius+real.radius
+          &&context.visible(enemy.x,enemy.y,tx,ty)&&context.visible(tx,ty,real.x,real.y))
+          original.hurt(enemy.attackDamage??enemy.damage,Math.atan2(real.y-ty,real.x-tx),enemy,projectileDamageType(definition.blastStyle??'frost'));
         enemy.attackHit = true;
       }
     }
@@ -219,12 +233,17 @@ export function updateEnemyAI(enemy: Enemy, dt: number, context: EnemyAIContext)
     if (definition.attack === 'melee') {
       if (definition.lungeSpeed > 0) context.move(enemy,
         Math.cos(enemy.attackAngle) * definition.lungeSpeed, Math.sin(enemy.attackAngle) * definition.lungeSpeed, dt);
-      if (!enemy.attackHit && circleIntersectsSector(p.x, p.y, p.radius,
+      if (!p.dead && !(enemy.decoyTarget?enemy.decoyTarget.hit:enemy.attackHit) && circleIntersectsSector(p.x, p.y, p.radius,
         enemy.x, enemy.y, enemy.attackAngle, definition.range, definition.arc)
         && context.visible(enemy.x, enemy.y, p.x, p.y)) {
-        enemy.attackHit = true; context.hurt(enemy.attackDamage ?? enemy.damage, enemy.attackAngle, enemy, 'physical');
+        if(enemy.decoyTarget)enemy.decoyTarget.hit=true;else enemy.attackHit=true;
+        context.hurt(enemy.attackDamage ?? enemy.damage, enemy.attackAngle, enemy, 'physical');
       }
     }
+    const real=context.player;
+    if(definition.attack==='melee'&&enemy.decoyTarget&&!enemy.attackHit&&!real.dead
+      &&circleIntersectsSector(real.x,real.y,real.radius,enemy.x,enemy.y,enemy.attackAngle,definition.range,definition.arc)
+      &&context.visible(enemy.x,enemy.y,real.x,real.y)){enemy.attackHit=true;original.hurt(enemy.attackDamage??enemy.damage,enemy.attackAngle,enemy,'physical');}
     if (enemy.stateTime + 1e-9 >= enemy.stateDuration) transitionEnemy(enemy, 'recover', enemyRecoveryDuration(enemy, definition.recovery));
   }
 }

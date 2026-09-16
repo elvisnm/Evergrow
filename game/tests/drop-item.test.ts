@@ -9,6 +9,7 @@ import { LOOT_RULES } from '../src/combat-content.ts';
 import { decodeCharacterSave, CHARACTER_SAVE_VERSION } from '../src/character-save.ts';
 import type { CharacterCheckpoint } from '../src/character-save.ts';
 import type { Input } from '../src/model.ts';
+import { PACK_CELLS } from '../src/inventory-grid.ts';
 const world = { blocked: () => false, move: (x:number,y:number,dx:number,dy:number) => ({x:x+dx,y:y+dy}) };
 const create = () => new Simulation(world, { spawn:false });
 const saved = async () => ({ok:true});
@@ -54,7 +55,7 @@ test('dropping equipped gear and active charms updates combat without healing',a
   const hp=sim.player.hp;assert.ok((await executeDropItem(sim,{type:'equipment',slot:'weapon',id:weapon.id},saved)).ok);
   assert.equal(sim.player.character.equipped.weapon,null);assert.equal(sim.player.hp,hp);
   let charm=generateItem(133,1,'charm','jade-pebble','common');charm.affixes[0]={name:'Vigor',stat:'maxHp',value:0};charm=deriveItem(charm);
-  addInventoryItem(sim.player.character,charm);refreshCharacter(sim.player);const boosted=sim.player.maxHp;
+  addInventoryItem(sim.player.character,charm);sim.player.character.inventoryLayout![charm.id]=PACK_CELLS;refreshCharacter(sim.player);const boosted=sim.player.maxHp;
   sim.player.hp=sim.player.maxHp;
   assert.ok((await executeDropItem(sim,{type:'bag',index:0,id:charm.id},saved)).ok);
   assert.ok(sim.player.maxHp<boosted);assert.equal(sim.player.hp,sim.player.maxHp);assert.equal(sim.groundItems.length,2);

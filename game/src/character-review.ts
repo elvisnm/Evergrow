@@ -1,3 +1,13 @@
+import { applyBurn, applySlow, applyStun } from './combat-status.ts';
+import { enemyDebuffs } from './enemy-debuffs.ts';
+import { drawEnemyPlate, getEnemyPlateLayout } from './enemy-plate.ts';
+import { uniqueSlot } from './unique-content.ts';
+import { AURA_IDS } from './aura-content.ts';
+import { manaCapacity } from './auras.ts';
+import { activeBuffs } from './active-buffs.ts';
+import { drawFloatingHUD } from './hud.ts';
+import { generateUnique } from './items.ts';
+import { UNIQUES } from './unique-content.ts';
 import { executeDropItem } from './drop-item-command.ts';
 import { CHARM_SIZES, CHARM_FLAVORS } from './charm-content.ts';
 import { PACK_CELLS, resolvePackLayout } from './inventory-grid.ts';
@@ -52,7 +62,7 @@ if(new URLSearchParams(location.search).has('charms')) {
   p.character.inventory.fill(null);p.character.inventoryLayout={};
   CHARM_SIZES.forEach((size,i)=>{
     const item=generateItem(8400+i,p.level,'charm',`${CHARM_FLAVORS[i].id}-${size.id}`,(['common','magic','rare','epic','legendary','rare'] as const)[i]);
-    p.character.inventory[i]=item;
+    p.character.inventory[i]=item;p.character.inventoryLayout![item.id]=PACK_CELLS+i*2;
   });
   p.character.stash=Array(96).fill(null);
   p.character.stash[0]=generateItem(8701,p.level,'charm','jade-monolith','legendary');
@@ -83,17 +93,16 @@ const profile = loadout === 'bow' ? 'crescent-recurve' : loadout === 'staff' ? '
   : loadout === 'wand' || loadout === 'grimoire' || loadout === 'orb' || loadout === 'wand-shield' ? 'star-wand'
   : loadout === 'dual' || loadout === 'shield' ? 'longsword' : undefined;
 if (profile) {
-  p.character.inventory[46] = generateItem(8409, 8, 'weapon', profile);
-  equipItem(p.character, 46, p.level);
+  // A loadout is staged directly: spatial pack validation must not silently reject the preset.
+  p.character.equipped.weapon = generateItem(8409, 1, 'weapon', profile);
+  p.character.equipped.offhand = null;
   if (loadout === 'grimoire' || loadout === 'orb' || loadout === 'wand-shield') {
-    p.character.inventory[47] = generateItem(8411, 8, loadout === 'wand-shield' ? 'shield' : loadout,
+    p.character.equipped.offhand = generateItem(8411, 1, loadout === 'wand-shield' ? 'shield' : loadout,
       loadout === 'wand-shield' ? 'vigil-kite' : loadout === 'grimoire' ? 'astral-grimoire' : 'rime-orb');
-    equipItem(p.character, 47, p.level, 'offhand');
   }
   if (loadout === 'shield' || loadout === 'dual') {
-    p.character.inventory[47] = generateItem(8410, 8, loadout === 'shield' ? 'shield' : 'weapon',
+    p.character.equipped.offhand = generateItem(8410, 1, loadout === 'shield' ? 'shield' : 'weapon',
       loadout === 'shield' ? 'vigil-kite' : 'rondel-dagger');
-    equipItem(p.character, 47, p.level, 'offhand');
   }
 }
 const comparisonReview = new URLSearchParams(location.search).get('comparison') === 'twohand';
@@ -105,19 +114,27 @@ if (comparisonReview) {
 const progressionReview = new URLSearchParams(location.search).has('progression');
 if (progressionReview) {
   while (p.level < 100) awardCharacterExperience(p, xpForNextLevel(p.level) - p.xp);
-  for (const id of ['skill:fireball', 'specialization:fireball-fork', 'specialization:fireball-ember', 'mastery:fireball', 'skill:cataclysm'])
+  for (const id of ['skill:fireball', 'specialization:fireball-fork', 'specialization:fireball-ember', 'skill:cataclysm'])
     executeCharacterCommand(p, { type: 'allocateNode', id });
-  for (let rank = 2; rank <= 5; rank++) executeCharacterCommand(p, { type: 'upgradeSkill', skill: 'fireball' });
+  for (let rank = 2; rank <= 3; rank++) executeCharacterCommand(p, { type: 'upgradeSkill', skill: 'fireball' });
   executeCharacterCommand(p, { type: 'configureSkill', skill: 'fireball', rank: 3, specialization: 'fireball-fork' });
 }
-refreshCharacter(p); p.hp = p.maxHp; p.mana = p.maxMana;
+if(new URLSearchParams(location.search).has('uniques')){p.level=25;p.character.inventory.fill(null);for(const [i,u] of UNIQUES.entries())p.character.inventory[i]=generateUnique(7319+i,25,u.id);}
+const auraReview=new URLSearchParams(location.search).has('auras');
+if(auraReview){
+ p.level=400;p.character.skillPoints=399;
+ for(const id of AURA_IDS)executeCharacterCommand(p,{type:'allocateNode',id:`skill:${id}`});
+ p.character.skillSlots=['ironroot','bloodOath',null,null,null];
+}
+refreshCharacter(p); p.hp = p.maxHp; p.mana = manaCapacity(p);
+if(auraReview&&p.auras)p.auras.blood={target:1,stacks:3,remaining:2.2};
 const root = document.querySelector<HTMLElement>('#app')!;
-let selected = new URLSearchParams(location.search).get('panel') === 'skills' ? 'skills' : 'character';
+let selected = new URLSearchParams(location.search).get('panel') ?? 'character';
 const shell = life.own(new GameShell(root, { play: () => {}, returnToTitle: () => {}, openMap: () => {},
   openCharacter: () => show('character'), openSkills: () => show('skills') }));
 const result = (action: ActionResult) => {
   if (!action.ok) shell.notifications.info(action.message ?? 'Unavailable');
-  refreshCharacter(p); inventory.refresh(p); tree.refresh(p);
+  refreshCharacter(p); inventory.refresh(p); tree.refresh(p); background();
 };
 const inventory = life.own(new InventoryPanel(shell.panelMount, { close: () => show('skills'),
   equip: (i, slot) => result(equipItem(p.character, i, p.level, slot)),
@@ -127,24 +144,72 @@ const inventory = life.own(new InventoryPanel(shell.panelMount, { close: () => s
   drop: source => { void executeDropItem(sim, source, async () => ({ok:true})).then(result); },
   equipBest: choice => result(executeCharacterCommand(p, { type: 'equipBest', choice })),
   sort: mode => result(executeCharacterCommand(p, { type: 'sortInventory', mode })),
+  assignSkill: (slot, skill) => result(executeCharacterCommand(p, { type: 'assignSkill', slot, skill })),
+  hudOptions: () => ({ reducedMotion: true }),
+  openSkills: skill => { show('skills'); tree.inspectNode(skill ? `skill:${skill}` : 'origin', true); tree.setDetailsVisible(true); },
   allocate: attribute => result(allocateAttribute(p.character, attribute)),
 }));
 const tree = life.own(new SkillTreePanel(shell.panelMount, {
   develop: command => result(executeCharacterCommand(p, command)), close: () => show('character'),
   allocate: id => result(executeCharacterCommand(p, { type: 'allocateNode', id })), assign: (slot, skill) => result(assignSkill(p, slot, skill)),
 }));
+const effectReview = new URLSearchParams(location.search).get('effects');
+if (effectReview) {
+  const signatures = effectReview === 'guard' ? ['patient-bastion'] : effectReview === 'rogue' ? ['duelists-return','ashen-double'] : effectReview === 'bow' ? ['pale-huntsman'] : effectReview === 'ward' ? ['broken-seal','borrowed-life'] : ['cinderheart-testament','borrowed-life'];
+  p.character.equipped.weapon = generateItem(400,p.level,'weapon',effectReview === 'guard' || effectReview === 'rogue' ? 'longsword' : effectReview === 'bow' ? 'crescent-recurve' : 'star-wand','common');
+  p.character.equipped.offhand = null;
+  for (const id of signatures) { const u = UNIQUES.find(u => u.id === id)!; p.character.equipped[uniqueSlot(u)] = generateUnique(400,p.level,id); p.character.allocatedNodes.push(`skill:${u.skill}`); }
+  refreshCharacter(p);
+  p.character.arcaneOverload = true; p.character.allocatedNodes.push('keystone:arcane-overload');
+}
+const statusTarget = effectReview ? sim.spawnEnemy('brute', p.x + 300, p.y)! : null;
+if (statusTarget) {
+  applyBurn(statusTarget,{duration:4,dps:12}); applySlow(statusTarget,{duration:3,factor:.6}); applyStun(statusTarget,1.4);
+  statusTarget.auraExposure = {fire:{power:12,remaining:2.3},frost:{power:12,remaining:1.6}};
+}
 const renderer = new Renderer(), fx = life.own(new PostFX(shell.canvas));
 function background() {
+  if (selected === 'hud' && new URLSearchParams(location.search).has('buffs')) {
+    p.derived.spellweavePercent = 20; p.derived.afterguardPercent = 24;
+    p.affixBuffs = { spell: 3.4, melee: 2.1, guard: 2.5 };
+    p.skillEffects = { echoes: [], brace: { remaining: 1.6, reduction: .2, charges: 0, bonus: 0 } };
+  }
+  if (effectReview) {
+    const effects = p.skillEffects = { echoes: [] } as NonNullable<typeof p.skillEffects>;
+    if (effectReview === 'guard') effects.bastion = {damage:86,remaining:5.2};
+    else if (effectReview === 'rogue') { effects.returnStep = {x:p.x-80,y:p.y,remaining:1.7,speed:520}; effects.decoy = {id:900,x:p.x+50,y:p.y,radius:10,reach:100,angle:0,remaining:1.2,hp:16,maxHp:20}; }
+    else if (effectReview === 'bow') { effects.ghostHunt = {remaining:4.2,reduction:0,charges:2,bonus:.6}; effects.archer = {x:p.x-40,y:p.y,angle:0,remaining:4.2}; }
+    else {
+      effects.borrowed = {capacity:23,remaining:2.7};
+      if (effectReview === 'ward') effects.ward = {capacity:32,remaining:2.8,rupture:{absorbed:58,cap:120,radius:140,offense:{critChance:0,critMultiplier:1,lifeOnHit:0}}};
+      else effects.embers = [{remaining:8.4,shots:[]},{remaining:16.8,shots:[]}];
+    }
+    if (statusTarget) effects.harvest = [{target:statusTarget.id,remaining:3.2}];
+  }
   const w = innerWidth, h = innerHeight, density = devicePixelRatio || 1;
   shell.canvas.width = Math.round(w * density); shell.canvas.height = Math.round(h * density);
   renderer.resize(Math.round(680 * w / h), 680);
-  renderer.render(sim, world, 0, { phase: 'paused', reducedMotion: true, debug: false, fps: 60 });
+  renderer.render(sim, world, 0, { phase: 'paused', reducedMotion: true });
   fx.render(renderer.canvas, 0);
+  shell.uiCanvas.width = Math.round(w * density); shell.uiCanvas.height = Math.round(h * density);
+  const ui = shell.uiCanvas.getContext('2d')!;
+  ui.setTransform(shell.uiCanvas.width / renderer.width, 0, 0, shell.uiCanvas.height / renderer.height, 0, 0);
+  if (selected !== 'character') drawFloatingHUD(ui, p, renderer.width, renderer.height, 0, { reducedMotion: true });
+  inventory.refresh(p);
+  shell.resizeControls(renderer.width, renderer.height);
+  shell.setBuffs(selected === 'hud' ? activeBuffs(p) : []);
+  if (selected === 'hud' && statusTarget) {
+    const debuffs = enemyDebuffs(statusTarget,p), plate = getEnemyPlateLayout(renderer.width,renderer.height,false,0,true);
+    drawEnemyPlate(ui,statusTarget,renderer.width,renderer.height,{hasDebuffs:true,reducedMotion:true});
+    shell.setTargetEffects({id:statusTarget.id,buffs:debuffs,x:(plate.x+plate.width/2)/renderer.width,y:(plate.y+76)/renderer.height,opacity:1});
+  } else shell.setTargetEffects(null);
+  shell.shortcutMenu.setPoints(p.character.statPoints, p.character.skillPoints);
 }
 function show(panel: string) {
-  selected = panel; inventory.close(); tree.close(); shell.showMenu(panel === 'skills' ? 'skills' : 'character', 0, 0);
+  selected = panel; inventory.close(); tree.close(); shell.showMenu(panel === 'hud' ? 'playing' : panel === 'skills' ? 'skills' : 'character', 0, 0);
+  if (panel === 'hud') { background(); return; }
   if (panel === 'skills') {
-    tree.open(p); tree.inspectNode(new URLSearchParams(location.search).get('node') ?? (progressionReview ? 'skill:fireball' : 'skill:cleave'), true);
+    tree.open(p); tree.inspectNode(new URLSearchParams(location.search).get('node') ?? (new URLSearchParams(location.search).get('zoom')==='overview' ? 'origin' : progressionReview ? 'skill:fireball' : 'skill:cleave'), true);
     if (new URLSearchParams(location.search).has('map')) tree.setDetailsVisible(false);
     const zoom = new URLSearchParams(location.search).get('zoom');
     if (zoom === 'overview') tree.showOverview();
@@ -152,18 +217,19 @@ function show(panel: string) {
     else if (zoom === 'arcana') tree.setView(0, -1000, .34);
     else if (zoom === 'school') {
       const node = SKILL_NODES.get(new URLSearchParams(location.search).get('node') ?? 'skill:fireball')!;
-      const family = [node, ...SKILL_TREE.nodes.filter(n => n.developmentSkill === node.skill)];
+      const family = node.cluster ? SKILL_TREE.nodes.filter(n => n.cluster === node.cluster) : [node];
       tree.setView((Math.min(...family.map(n => n.x)) + Math.max(...family.map(n => n.x))) / 2,
         (Math.min(...family.map(n => n.y)) + Math.max(...family.map(n => n.y))) / 2, .85);
     }
     else if (zoom === 'region' || zoom === 'detail') {
-      const cluster = SKILL_TREE.clusters.find(cluster => cluster.domain === 'Might' && cluster.name === 'Heart of Iron')!;
+      const cluster = SKILL_TREE.clusters.find(cluster => cluster.id === 'bastion:2')!;
       const notable = SKILL_TREE.nodes.find(node => node.cluster === cluster.id && node.kind === 'notable')!;
       tree.inspectNode(notable.id, false);
       tree.setView(cluster.x + (zoom === 'region' ? -350 : 0), cluster.y + (zoom === 'region' ? 250 : 0), zoom === 'detail' ? 1.2 : .3);
     }
   }
   else inventory.open(p);
+  background();
   root.dataset.ready = 'true'; root.dataset.panel = panel;
 }
 background(); show(selected);

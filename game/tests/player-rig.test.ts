@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getPlayerArmRig, type CharacterPose } from '../src/art.ts';
 import { projectArmPoint, type ArmRig, type RigPoint } from '../src/player-arm-rig.ts';
-import { createStartingEquipment, getGripLength, getSupportGripOffset, getWeaponGrip, STARTING_SWORD } from '../src/equipment.ts';
+import { createStartingEquipment, getGripLength, getSupportGripOffset, getWeaponGrip, STARTING_SWORD, UNARMED_WEAPON } from '../src/equipment.ts';
 import { playerPose } from '../src/character-pose.ts';
 import { Simulation } from '../src/simulation.ts';
 import { WEAPON_PROFILES, SHIELD_PROFILES } from '../src/weapon-content.ts';
@@ -24,13 +24,13 @@ const distance = (a: readonly number[], b: readonly number[]) => Math.hypot(...a
 const near = (actual: number, expected: number, message: string, tolerance = 1e-8) =>
   assert.ok(Math.abs(actual - expected) < tolerance, `${message}: expected ${expected}, received ${actual}`);
 
-function validateArm(arm: ArmRig, description: string): void {
+function validateArm(arm: ArmRig, description: string, proportion = 1): void {
   for (const joint of [arm.shoulder, arm.elbow, arm.hand]) {
     assert.ok(joint.every(Number.isFinite), `${description}: every joint is finite`);
   }
   near(distance(arm.shoulder, arm.elbow), arm.upperLength, `${description}: upper-arm length`);
   near(distance(arm.elbow, arm.hand), arm.forearmLength, `${description}: forearm length`);
-  assert.ok(arm.upperLength >= 9.1 && arm.forearmLength >= 10.8, `${description}: facing never shrinks bones`);
+  assert.ok(arm.upperLength >= 9.1 * proportion && arm.forearmLength >= 10.8 * proportion, `${description}: facing never shrinks bones`);
   near(arm.upperLength / arm.forearmLength, 9.1 / 10.8, `${description}: long reaches preserve limb proportions`);
 }
 
@@ -41,6 +41,34 @@ function assertContinuous(a: ReturnType<typeof getPlayerArmRig>, b: ReturnType<t
     }
   }
 }
+
+test('unarmed empty arms rest beside the thighs with matching shallow bends at every facing', () => {
+  for (let facing = 0; facing < 32; facing++) {
+    const angle = facing / 32 * TAU;
+    const pose: CharacterPose = { ...rest, angle, attackAngle: angle, weapon: UNARMED_WEAPON.visual, grip: 'one-handed' };
+    const rig = getPlayerArmRig(pose);
+    assert.equal(playerMotion(pose).supportHolding, false);
+    for (const [side, arm] of [[1, rig.weapon], [-1, rig.offhand]] as const) {
+      validateArm(arm, 'unarmed rest', .86);
+      assert.ok(arm.upperLength + arm.forearmLength < 17.2, 'relaxed unarmed limbs retain their shorter span');
+      assert.ok(arm.hand[2] >= 10 && arm.hand[2] <= 11, 'palm rests beside the upper thigh rather than the knee');
+      const lateral = (-Math.sin(angle) * arm.hand[0] + Math.cos(angle) * arm.hand[1]) * side;
+      assert.ok(lateral > 7 && lateral < 9, 'hand clears the torso without flaring outward');
+      const upper = arm.elbow.map((v, i) => v - arm.shoulder[i]);
+      const lower = arm.hand.map((v, i) => v - arm.elbow[i]);
+      const bend = Math.acos(upper.reduce((sum, v, i) => sum + v * lower[i], 0) / (arm.upperLength * arm.forearmLength));
+      assert.ok(bend > .15 && bend < .9, 'elbow has a soft bend instead of a raised guard or locked arm');
+    }
+    near(rig.weapon.hand[2], rig.offhand.hand[2], 'both empty hands rest at the same height');
+    for (const phase of [0, 1.3, 4.1]) for (const action of actions) {
+      const moving = getPlayerArmRig({ ...pose, ...action, moving: 1, gaitPhase: phase });
+      validateArm(moving.weapon, 'unarmed action', .86); validateArm(moving.offhand, 'unarmed action', .86);
+    }
+    assertContinuous(rig, getPlayerArmRig({ ...pose, attack: 1 - 1e-7 }), 'unarmed attack returns to rest');
+    const shield = { kind: 'shield', visual: SHIELD_PROFILES[0].visual } as const;
+    assert.ok(getPlayerArmRig({ ...pose, offHand: shield }).offhand.hand[2] >= 18, 'equipped shield keeps its guard');
+  }
+});
 
 test('player arm bones remain connected at every facing through movement, attacks and casting', () => {
   for (let facing = 0; facing < 72; facing++) {
@@ -106,7 +134,7 @@ test('authored weapon handedness selects the appropriate stance with or without 
   assert.equal(getWeaponGrip(equipment), 'one-handed', 'an empty off-hand keeps a raised free-hand guard');
 });
 
-test('bows attach to the string and staff palms stay eight units apart on the shaft', () => {
+test('bows attach to the string, supported staves grip the shaft and fire staves relax the free arm', () => {
   for (const weapon of WEAPON_PROFILES.filter(profile => profile.family === 'bow' || profile.family === 'staff')) {
     for (let facing = 0; facing < 16; facing++) for (const attack of [0, .05, .19, .25, .45, .8]) for (const cast of [0, .7]) {
       const angle = facing / 16 * TAU;
@@ -115,6 +143,11 @@ test('bows attach to the string and staff palms stay eight units apart on the sh
       const motion = playerMotion(pose), rig = getPlayerArmRig(pose);
       validateArm(rig.weapon, weapon.name); validateArm(rig.offhand, weapon.name);
       const lead = projectArmPoint(rig.weapon.hand), support = projectArmPoint(rig.offhand.hand);
+      if (weapon.family === 'staff' && weapon.damageType === 'fire') {
+        assert.equal(motion.supportHolding, false);
+        near(rig.offhand.hand[2], 8, 'fire staff free hand rests beside the thigh');
+        continue;
+      }
       if (weapon.family === 'staff') assert.equal(motion.supportHolding, true);
       const origin = lead;
       const dx = support[0] - origin[0], dy = support[1] - origin[1];

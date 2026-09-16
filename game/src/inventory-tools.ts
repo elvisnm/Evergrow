@@ -1,5 +1,6 @@
+import { estimateItemPower } from './items.ts';
 import { hasStorageTab, storageTabItems, STASH_CAPACITY } from './storage-content.ts';
-import { resolvePackLayout, type PackLayout } from './inventory-grid.ts';
+import { PACK_CELLS, resolvePackLayout, repackLayout, type PackLayout } from './inventory-grid.ts';
 import type { ActionResult, CharacterSheet, Item, ItemTier } from './character-types.ts';
 import { EQUIPMENT_SLOTS, ITEM_KINDS } from './items.ts';
 import { itemFitsSlot, planEquipmentChange } from './inventory.ts';
@@ -7,7 +8,7 @@ import { itemFitsSlot, planEquipmentChange } from './inventory.ts';
 export type InventorySort = 'rarity' | 'type' | 'recent' | 'compact';
 type SortPriority = Exclude<InventorySort, 'compact'>;
 export type InventoryFilter = 'weapons' | 'armor' | 'jewelry' | 'offhand' | 'charms';
-const tiers: ItemTier[] = ['common', 'magic', 'rare', 'epic', 'legendary'];
+const tiers: ItemTier[] = ['common', 'magic', 'rare', 'epic', 'legendary', 'unique'];
 export const INVENTORY_SORT_PRIORITY: Readonly<Record<InventorySort, readonly SortPriority[]>> = {
   compact: ['type', 'rarity', 'recent'],
   rarity: ['rarity', 'type', 'recent'], type: ['type', 'rarity', 'recent'], recent: ['recent', 'rarity', 'type'],
@@ -41,10 +42,11 @@ export function sortInventory(sheet: CharacterSheet, mode: InventorySort): Actio
   if (!['rarity', 'type', 'recent', 'compact'].includes(mode)) return { ok: false, message: 'Unknown inventory sort.' };
   const inventory = orderedItems(sheet, sheet.inventory, mode);
   const before = resolvePackLayout(sheet);
-  const layout = resolvePackLayout({ inventory });
+  const layout = repackLayout(inventory, before);
   for(const charm of [false,true]){
-    const overflowBefore=sheet.inventory.filter(item=>item&&(item.kind==='charm')===charm&&before[item.id]===undefined).length;
-    const overflowAfter=inventory.filter(item=>item&&(item.kind==='charm')===charm&&layout[item.id]===undefined).length;
+    const inRegion=(item:Item)=> (before[item.id]>=PACK_CELLS)===charm;
+    const overflowBefore=sheet.inventory.filter(item=>item&&inRegion(item)&&before[item.id]===undefined).length;
+    const overflowAfter=inventory.filter(item=>item&&inRegion(item)&&layout[item.id]===undefined).length;
     if(overflowAfter>overflowBefore)return {ok:false,message:'This arrangement needs more space. Your pack is unchanged.'};
   }
   sheet.inventory = inventory; sheet.inventoryLayout = layout;
@@ -73,7 +75,7 @@ export function sortStorage(sheet: CharacterSheet, tab = 0): ActionResult {
 }
 
 /** Item power is an estimate, including the shared enhancement multiplier. */
-const equipBestScore = (item: Item | null) => item?.power ?? -1;
+const equipBestScore = (item: Item | null) => item ? estimateItemPower(item) : -1;
 
 export type EquipBestChoice = 'check' | 'replace' | 'keep';
 export type BestEquipmentPlan = { ok: false; message: string } | {

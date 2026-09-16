@@ -4,7 +4,7 @@
 
 ## Prototype version policy
 
-Player-facing versions remain below **0.5.0** until the user explicitly approves a new milestone. The user approved **0.2.0** for the settlement and gambler milestone and **0.3.0** for the spatial inventory, charms and resistance milestone on 2026-09-09. Routine publications after 0.3.0 increment the patch number (**0.3.1**, **0.3.2**, and so on). Patch numbers have no single-digit limit. Minor versions (0.2, 0.3, 0.4) mark deliberate product milestones, not each feature pass. Do not advance to 0.5 or 1.0 automatically.
+Player-facing versions stay within the latest explicitly approved prototype milestone. The current ceiling is **0.6.x**; do not advance to 0.7 or 1.0 without approval. The user approved **0.2.0** for the settlement and gambler milestone and **0.3.0** for the spatial inventory, charms and resistance milestone on 2026-09-09. Routine publications after 0.3.0 increment the patch number (**0.3.1**, **0.3.2**, and so on). Patch numbers have no single-digit limit. Minor versions (0.2, 0.3, 0.4) mark deliberate product milestones, not each feature pass. Do not advance beyond the approved milestone automatically.
 
 On 2026-09-09 the display history was renumbered, preserving every date, note and development-recap marker. The renumbered history ships with 0.2.0; it does not redeploy historical builds. The audit records below retain their original published labels, source SHAs and Sites IDs. Save schema v4, world generation 10, dungeon layout versions and Sites snapshot numbers are independent technical identifiers; never lower them to match a game release label.
 
@@ -27,7 +27,184 @@ On 2026-09-09 the display history was renumbered, preserving every date, note an
 | 0.8.0 | 0.1.14 |
 | 0.9.0 | 0.1.15 |
 
+The user approved **0.4.0** on 2026-09-13 for the rebuilt passive atlas and merchant overhaul. This remains a prototype milestone below 0.5.0.
+
+The user approved the next major prototype milestone, **0.5.0**, on 2026-09-13 for the new HUD, stained-glass skill icons, inventory skill assignment and twelve Unique items. Routine updates after this milestone use 0.5.x.
+
+The user approved the next major prototype milestone, **0.6.0**, on 2026-09-14 for Crimson Rifts, keys, ranked monsters and the accompanying interface and performance updates. Routine updates after this milestone use 0.6.x.
+
 ## Last verified publication
+
+- Game v0.6.6 / Sites version 60, publicly deployed on 2026-09-16 at 13:50:13 UTC.
+- Published source: `12fdd74ba67dcb6be02a7ee03f8ed626b82511db`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_c8d0940808f08191876be527a1e53eba`.
+- Deployment: `appgdep_6aaa9e81af688191bcd8ec1c15c8b176`; Sites returned `succeeded`.
+- Includes PRs #56–62: cloud character-hall recovery/layout fixes, smoother obstacle movement, region announcements, pending boss reward objectives, elemental reactions and debuff presentation, completed-event aftermath, and stable local event previews.
+- Full suite: 1,642 of 1,643 tests initially passed. Added the new movement module to the headless compiler boundary, then all 22 architecture/movement checks passed. Application/core type checking, local and cloud-enabled builds, archive validation and clean-source release validation passed. No automated browser gameplay was run.
+- Local development tools remain excluded from the published archive; the local server remains available.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.6.5 / Sites version 59, publicly deployed on 2026-09-15 at 07:06:15 UTC.
+- Published source: `ecb9a04f683881f12cce113ca414eec816dda4b4`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_e24f86b3c6988191810bb249f77ed453`.
+- Deployment: `appgdep_6aa8ee58adf0819187abb443f5bad283`; Sites returned `succeeded`.
+- Dedicated fire, frost, meteor and storm spell effects; resolved skill hover cards in the inventory bar and assignment picker.
+- All 118 relevant code tests passed, plus application/core type checking, local and cloud-enabled builds, archive validation and clean-source release validation. No automated browser gameplay was run.
+- The Prism Archmage fixture remains only in the user's local character slot; it is not part of this publication.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.6.4 / Sites version 58, publicly deployed on 2026-09-15 at 06:27:24 UTC.
+- Published source: `76d5ad29a9a6d98559510a63129de5eb7604e912`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_d4cc73833a7881919a1fd8f1e12d8194`.
+- Deployment: `appgdep_6aa8e53a794c81919085a44709644e99`; Sites returned `succeeded`.
+- Traveling Arc Lightning, luminous chain effects, Storm Circuit tuning, two-card weapon comparisons and release-warning cleanup.
+- All 134 relevant code tests passed, with application/core type checking, cloud-enabled client/Worker build, archive validation and clean-source release validation. No automated browser gameplay was run.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.6.3 / Sites version 57, publicly deployed on 2026-09-15 at 05:39:32 UTC.
+- Published source: `32125e1e2eec31715a4ff92c59e0183253bba1f7`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_ce3b0d0058c08191a93d5a377a4a8453`.
+- Deployment: `appgdep_6aa8da02ca6881919806b4ddb9618c0f`; Sites returned `succeeded`.
+- Includes PRs #45, #48, #49, #51, #52, #53 and #54: redesigned character hall and appearance editing, directional character art, map legend and service pings, destination-aware portals, ground resource motion, rift completion feedback and F3 performance monitor.
+- All 1,585 code tests passed, with application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation. No automated browser gameplay was run.
+- Existing characters and progress remain intact; no save reset, skill refund or database migration. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.6.2 / Sites version 56, publicly deployed on 2026-09-14 at 16:19:33 UTC.
+- Published source: `09e32e06ecb7f039be724ae26a7c191fba4d504d`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_645eb1c05f7c8191b66a4f73d2c5c3a3`.
+- Deployment: `appgdep_6aa81e8295a88191a312d8dba260d029`; Sites returned `succeeded`.
+- Rift fissures, floating fragments, biome corruption and progress-driven lightning; restored ground detail and sharper enlarged scenery.
+- Focused physical weapon affixes, stronger damage rolls with smaller material premiums, reduced random glove speed bonuses and roll-aware gear power. Unique combat stats remain unchanged.
+- Charms enter the normal bag for manual activation; buffered skill presses survive action recovery.
+- Existing characters retain progress and active charms. Regular weapon/glove budgets update on read; obsolete melee caster affixes become suitable bonuses. No database migration or character reset.
+- The loot checkpoint passed all 1,531 code tests and a 265,062-item audit. Final publication passed 41 focused checks, application/core type checking, cloud-enabled client/Worker build, archive validation and clean-source release validation.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.6.1 / Sites version 55, publicly deployed on 2026-09-14 at 13:52:11 UTC.
+- Published source: `c469820aa3b8cd2ea15bb55690fe61df6eecabd6`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_6727d96bb6f081919cccb493e37d2b02`.
+- Deployment: `appgdep_6aa7fbf68ff08191be9b55cb6af50469`; Sites returned `succeeded`.
+- New rifts use connected clearings, branching trails, biome ridges, four encounter formations, Ritual Ward support and staggered Stormbound/Cinder specials. Density keys add reinforcements to clearings. Timer, progress target and chest rewards remain unchanged.
+- All 1,514 code tests passed. Application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation passed. No automated browser gameplay was run.
+- Existing local/cloud characters and active rifts remain compatible; no save reset, skill refund or D1 migration. Reload and start a new rift for the new layout.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.6.0 / Sites version 54, publicly deployed on 2026-09-14 at 13:14:42 UTC.
+- Published source: `b70a176e65fbfba4baa4e011a76f013e76c9523b`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_2f020f3af0c08191a8182e09d5900d92`.
+- Deployment: `appgdep_6aa7f333135c8191b5874e3caa7e2ca5`; Sites returned `succeeded`.
+- Crimson Rifts, optional inventory keys, guardian arrival and automatic rewards; ranked enemy outlines/traits, dense-pack performance, smooth rift maps, Chronicle records and eighteen achievement milestones.
+- Includes merged PRs #32, #36, #37, #38, #41, #42 and #43: master volume, inventory drag performance, background rendering suspension, map tooltips, radiant wand identity, unarmed poses and inventory refinement. Also includes compact ground-loot comparisons and stable Alt inspection.
+- All 1,508 code tests passed under Node 24 with four test workers. Application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation passed. No automated browser gameplay was run.
+- Existing local/cloud characters remain compatible; no save reset, skill refund or D1 migration. Existing rift ledger records seed Chronicles; previously untracked details start with this update. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.5.3 / Sites version 53, publicly deployed on 2026-09-14 at 08:24:11 UTC.
+- Published source: `dfb1f3d072351d08de43b33bf5a52acb230e89f7`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_c49e9f6173948191853fda8ba40a5aee`.
+- Deployment: `appgdep_6aa7af1ad0288191b45df34212248a7c`; Sites returned `succeeded`.
+- Vendor/item tooltips dismiss despite retained mouse-click focus; unrelated pointer exits cannot prolong the primary card's grace. Keyboard inspection and nested explanations remain available.
+- Skill atlas cards wait 350 ms per node, retain immediate highlights/routes, allow 200 ms exit grace and dismiss on dragging/zooming. Reduced motion keeps the intent delay without animation.
+- All 22 focused tooltip, comparison, keyboard, route and changelog checks passed, along with application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation. No automated browser gameplay was run.
+- Existing local/cloud characters remain compatible; no save reset, skill refund or D1 migration. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.5.2 / Sites version 52, publicly deployed on 2026-09-14 at 06:10:53 UTC.
+- Published source: `1843cf63efda3f643b170eaa3fb66088a92902d1`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_3377ce2ed1088191804f89d285a56062`.
+- Deployment: `appgdep_6aa78fdd9e1c8191b1e78ba4b761ed50`; Sites returned `succeeded`.
+- Covers merged PRs #13, #14, #15, #19, #21, #24, #25, #27, #18, #20, #26, #17, #30 and #28: sell values, stable drag previews, Fire Staff pose, Heartwood Draw switching, event progress, mana feedback, map symbols/recentering, remappable loot reveal, live Tab map, cursor settings, equipment comparisons and the frosted pause menu.
+- Ran 1,450 code tests: 1,448 passed initially. Added the event-progress module to the explicit core compiler check and updated the old staff-grip assertion for Fire Staff's relaxed arm; all 17 architecture, rig and changelog checks then passed.
+- Application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation passed. No automated browser gameplay was run.
+- Existing local/cloud characters remain compatible; no save reset, skill refund or D1 migration. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.5.1 / Sites version 51, publicly deployed on 2026-09-13 at 17:02:41 UTC.
+- Published source: `b0769a7f0dcc0a626db062ae220d0db700627bba`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_d6deee73817c81919f3cc0c17a759cfd`.
+- Deployment: `appgdep_6aa6d71e9a388191a38bdd0009f59d61`; Sites returned `succeeded`.
+- Seven reserving auras, rank investment, reserved mana orb, shared player/target effects and nested item/stat/skill/Unique explanations.
+- Eighteen Uniques total, compact Unique markers, skill-led powers and lower weapon/support mana costs.
+- Keyboard/mouse remapping with alternate bindings, conflict replacement, per-device persistence and live shortcut labels.
+- Audit fixes for continuous boss slows, immediate ward/barrier limits after maximum-life changes and keyboard ownership while inspecting effects; includes the merged mobile pinch-zoom correction.
+- All 1,403 combined code tests passed. After merging the CSS-only mobile fix and updating notes, all 19 affected touch, effect-keyboard and changelog checks passed.
+- Application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation passed. No automated browser gameplay was run.
+- Existing local/cloud characters remain compatible; no save reset, skill refund or D1 migration. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.5.0 / Sites version 50, publicly deployed on 2026-09-13 at 10:13:45 UTC.
+- Published source: `ea9824504ab25d0711d917519d2782bf1d77b37b`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_c238f9fe20f88191824dd8f6bdbe0355`.
+- Deployment: `appgdep_6aa6774d7150819180087279762cec02`; Sites returned `succeeded`.
+- Compact square HUD, equipped-weapon art, stained-glass icons for all 30 skills, separate utility medallions and a focused navigation menu.
+- Inventory footer integrates resources and skill slots, with right-click assignment/clearing and left-click atlas details through saved character commands.
+- All twelve skill-changing Uniques, equal Unique/Legendary drop chances, level-scaled fixed affixes and the Chronicles collection.
+- Ran 1,347 code tests: 1,344 passed initially. Updated the renderer fixture for opaque Path2D icons and the current Q/Space labels, and corrected the release timestamp format. All 21 affected renderer, HUD, assignment and changelog checks then passed.
+- Application/core type checks, local and cloud-enabled client/Worker builds, archive contents and clean-source release validation passed. No automated browser gameplay was run.
+- Existing local/cloud characters remain compatible; no new reset, tree refund or D1 migration. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.4.0 / Sites version 49, publicly deployed on 2026-09-13 at 06:19:47 UTC.
+- Published source: `25f6c547196fbfc836bf3ffb8c1d8ee7b5664771`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_cdb5f10c8f908191a963306320000ea8`.
+- Deployment: `appgdep_6aa640720c948191abfdf2cb3766ee09`; Sites returned `succeeded`.
+- Connected 1,824-node atlas, 144 passive neighborhoods, stronger passive rewards, distinct cluster shapes and grouped stat search with visible match markers.
+- Preserves 30 active skills, 90 Techniques and twenty ranks. Valid preceding trees receive a one-time node/rank refund and reopen the atlas for rebuilding; character and world progress remain.
+- Item-sized vendor/buyback trays, category tabs, saved escalating restock fees, enhancement/enchanting workbenches and direct drag/double-click trading.
+- Ran all 1,312 code tests: 1,308 passed initially. Added the new shape and preceding-tree data modules to the explicit core compiler list, then both architecture checks passed. Two cloud-worker timeout cases and their parent test passed in the isolated 38-check cloud suite.
+- Application/core type checks, local and cloud-enabled client/Worker builds, archive contents and clean-source release validation passed. No automated browser gameplay or account-save edits were performed.
+- Client and Worker share the save upgrade rules; no D1 migration required. Reload existing clients.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.3.17 / Sites version 48, publicly deployed on 2026-09-12 at 18:15:31 UTC.
+- Published source: `45f5320ed55f82ff4397427a04090205c68c1cfc`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_289300146e888191aa505bb044d5caea`.
+- Deployment: `appgdep_6aa596b1e8b48191812ad1609614563a`; Sites returned `succeeded`.
+- All 30 active skills now support 20 purchased ranks with +5% base damage and +1.5% base mana per additional rank; 90 Techniques retain their choices.
+- Smaller movement, ward, guard, stance and shelter gains remain useful through all ranks; defensive previews retain fractional improvements.
+- Current-tree saves retain purchases, assignments and progress, with gentler early-rank tuning; no additional refund, reset or database migration. Matching game and cloud validators shipped together.
+- Ran the 1,293-test code suite; corrected two obsolete combat expectations and passed all 49 focused retests. Cloud timeout failures passed all 38 checks when rerun separately. Three release-note checks, application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation passed. No automated browser gameplay was run.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
+
+- Game v0.3.16 / Sites version 47, publicly deployed on 2026-09-12 at 16:38:50 UTC.
+- Published source: `fca34cec89f92521699c1a5e07089bf1f7638152`.
+- Saved version: `appgprj_6a9c702e88608191a86a8a753f552b44~appgver_0ff1f1e3ea308191a4107357d7cd9024`.
+- Deployment: `appgdep_6aa58007d9e0819181bc876bb06a9014`; Sites returned `succeeded`.
+- Six-territory atlas with 875 nodes, 90 passive specialties, 30 active skills, 90 Techniques, eight Doctrine families and four optional keystones.
+- Movement/defensive/ultimate additions, gentler purchased ranks, utility-rank scaling, armor scaling, independent shelter expiry and corrected echo/Spellweave behavior.
+- Smoother routes, spaced skill medallions and captions that avoid nodes, connectors, other text and navigation controls.
+- Valid preceding-tree saves receive a free one-time node/rank refund. Continue opens the atlas at its root with details visible and gameplay paused; players unlock and reassign skills. Character/world progress is preserved; no database migration. Unsupported saves remain stored.
+- Passed all 1,291 code tests, application/core type checking, local and cloud-enabled client/Worker builds, archive validation and clean-source release validation. No automated browser gameplay was run.
+- This publication record is a documentation-only checkpoint after the deployed source above.
+
+## Previous verified publication
 
 - Game v0.3.15 / Sites version 46, publicly deployed on 2026-09-12 at 09:40:10 UTC.
 - Published source: `540b537389af0295f9ffdae0842e41568d473655`.
@@ -281,7 +458,7 @@ On 2026-09-09 the display history was renumbered, preserving every date, note an
 
 1. Resolve the source of the last **successful publication** from the Sites history/current release record. A saved version alone is not proof of publication. For the initial changelog release the known published baseline is `1978bf9d210533cb83b11c8c9863e766f7c13562` (Sites version 14).
 2. Read the commits and relevant implementation since that source. Summarize what players can actually experience; omit internal refactors, unpublished experiments and changes later reverted.
-3. Prepend a versioned, timestamped release entry in `CHANGELOG.md`. Use **New**, **Tweaks**, and **Fixes** (omit empty sections). Lead with exciting features and meaningful balance changes; describe bugs in terms of what players experienced. Explicitly call out save resets. Use short factual bullets, ideally one line each. No themed titles or promotional copy. Increment the patch version for each publication under the prototype policy above; record its UTC preparation time, displayed in Europe/Paris time in the reader.
+3. Prepend a versioned, timestamped release entry in `CHANGELOG.md`. Use **New**, **Tweaks**, and **Fixes** (omit empty sections). Lead with exciting features and meaningful balance changes; describe bugs in terms of what players experienced. Reserve warning notices for save resets or required player actions such as rebuilding skills. Omit routine save-preservation and refresh reminders; keep informational changes in ordinary bullets. Historical development-recap labels remain neutral text. Explicitly call out save resets. Use short factual bullets, ideally one line each. No themed titles or promotional copy. Increment the patch version for each publication under the prototype policy above; record its UTC preparation time, displayed in Europe/Paris time in the reader.
 4. Validate the reader, run appropriate code tests and the production Site build. Commit the notes alongside the exact release source, and push the checkpoint to origin.
 5. Run `npm run release:check -- <full-last-published-source-sha>`. It checks the format, requires a clean committed tree, and rejects a changed build whose newest notes are unchanged from that publication. Re-publishing the identical source can reuse its existing notes; do not invent gameplay changes.
 6. Follow the Sites skills: push the exact source to its bound repository, package that build, save the version and publish to the requested existing audience. Verify deployment success before saying it is live. On failure, preserve the prepared notes and retry the same release rather than creating a second entry.

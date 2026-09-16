@@ -22,16 +22,17 @@ export function storageGridLayout(items: readonly (Item | null)[]): { cells: Arr
 
 export function footprintCells(item: Item, cell: number): number[] | null {
   if (!Number.isInteger(cell) || cell < 0 || cell >= INVENTORY_CELLS
-    || (cell >= PACK_CELLS) !== (item.kind === 'charm')) return null;
+    || cell >= PACK_CELLS && item.kind !== 'charm') return null;
   return [cell];
 }
 export function packOccupancy(inventory: CharacterSheet['inventory'], layout: PackLayout): Set<number> {
   return new Set(inventory.flatMap(item => item && layout[item.id] !== undefined ? footprintCells(item, layout[item.id]) ?? [] : []));
 }
-export function findPackSpace(item: Item, occupied: ReadonlySet<number>, preferred?: number): number | null {
-  const charms = item.kind === 'charm';
-  if (preferred !== undefined && footprintCells(item, preferred) && !occupied.has(preferred)) return preferred;
-  for (let cell = charms ? PACK_CELLS : 0; cell < (charms ? INVENTORY_CELLS : PACK_CELLS); cell++) if (!occupied.has(cell)) return cell;
+export function findPackSpace(item: Item, occupied: ReadonlySet<number>, preferred?: number, region: 'bag' | 'charms' = 'bag'): number | null {
+  const charms = region === 'charms';
+  const fits = (cell: number) => !!footprintCells(item, cell) && !occupied.has(cell);
+  if (preferred !== undefined && (preferred >= PACK_CELLS) === charms && fits(preferred)) return preferred;
+  for (let cell = charms ? PACK_CELLS : 0; cell < (charms ? INVENTORY_CELLS : PACK_CELLS); cell++) if (fits(cell)) return cell;
   return null;
 }
 
@@ -65,7 +66,7 @@ export function validPackLayout(inventory: CharacterSheet['inventory'], value: u
 export function canPackItem(sheet: Pick<CharacterSheet, 'inventory' | 'inventoryLayout'>, item: Item): boolean {
   if (!sheet.inventory.includes(null) && sheet.inventory.length >= INVENTORY_CELLS) return false;
   const layout = resolvePackLayout(sheet);
-  return !sheet.inventory.some(owned => owned && (owned.kind === 'charm') === (item.kind === 'charm') && layout[owned.id] === undefined)
+  return !sheet.inventory.some(owned => owned && layout[owned.id] === undefined)
     && findPackSpace(item, packOccupancy(sheet.inventory, layout)) !== null;
 }
 
@@ -75,7 +76,18 @@ export function activeCharms(sheet: Pick<CharacterSheet,'inventory'|'inventoryLa
   return sheet.inventory.filter((item):item is Item=>!!item && item.kind==='charm' && item.requiredLevel<=level && layout[item.id]>=PACK_CELLS);
 }
 
+/** Repack each region densely in inventory order; charms already in the charm grid stay active. */
+export function repackLayout(inventory: CharacterSheet['inventory'], previous: PackLayout = {}): PackLayout {
+  const layout: PackLayout = {};
+  let bag = 0, charms = PACK_CELLS;
+  for (const item of inventory) if (item) {
+    if (item.kind === 'charm' && previous[item.id] >= PACK_CELLS) { if (charms < INVENTORY_CELLS) layout[item.id] = charms++; }
+    else if (bag < PACK_CELLS) layout[item.id] = bag++;
+  }
+  return layout;
+}
+
 /** One cell per item: a placement can only fail because its region has no free cell. */
-export function packSpaceProblem(_sheet: Pick<CharacterSheet,'inventory'|'inventoryLayout'>,item:Item): string {
-  return `${item.kind === 'charm' ? 'Charm grid' : 'Bag'} full. Make room for this item.`;
+export function packSpaceProblem(_sheet: Pick<CharacterSheet,'inventory'|'inventoryLayout'>,_item:Item,region: 'bag' | 'charms' = 'bag'): string {
+  return `${region === 'charms' ? 'Charm grid' : 'Bag'} full. Make room for this item.`;
 }

@@ -3,7 +3,7 @@ import type { CombatEvent, Enemy } from './model.ts';
 
 const HOVER_GRACE = .25;
 const HIT_RETENTION = 1.5;
-import { ENEMY_BODY_BOUNDS } from './enemy-body.ts';
+import { enemyBodyBounds } from './enemy-body.ts';
 
 interface VisibleEnemy { enemy: Enemy; x: number; y: number; centerY: number; radiusX: number; radiusY: number; }
 
@@ -43,7 +43,7 @@ export class EnemyFocus {
   }
 
   update(enemies: readonly Enemy[], view: CameraView, pointer: { x: number; y: number } | null,
-    alpha: number, dt: number, enabled = true): Enemy | null {
+    alpha: number, dt: number, enabled = true, inspectedId: number | null = null): Enemy | null {
     if (!enabled) { this.reset(); return null; }
     const elapsed = Number.isFinite(dt) ? Math.max(0, dt) : 0;
     const interpolation = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1;
@@ -55,7 +55,7 @@ export class EnemyFocus {
     const visible = new Map<number, VisibleEnemy>();
     for (const enemy of enemies) {
       if (enemy.state === 'dead' || enemy.hp <= 0 || this.killedIds.has(enemy.id)) continue;
-      const body = ENEMY_BODY_BOUNDS[enemy.kind];
+      const body = enemyBodyBounds(enemy);
       const x = enemy.prevX + (enemy.x - enemy.prevX) * interpolation;
       const y = enemy.prevY + (enemy.y - enemy.prevY) * interpolation;
       const centerY = y + (body.top + body.bottom) / 2;
@@ -96,7 +96,7 @@ export class EnemyFocus {
       this.hitRemaining = HIT_RETENTION;
     }
 
-    this.targetId = this.retainedHoverId ?? this.recentHitId;
+    this.targetId = inspectedId !== null && visible.has(inspectedId) ? inspectedId : this.retainedHoverId ?? this.recentHitId;
     return this.targetId === null ? null : visible.get(this.targetId)?.enemy ?? null;
   }
 }

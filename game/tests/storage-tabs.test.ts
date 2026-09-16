@@ -11,6 +11,7 @@ import { Simulation } from '../src/simulation.ts';
 import { WORLD_GENERATION_VERSION } from '../src/world.ts';
 import type { CharacterSheet } from '../src/character-types.ts';
 import type { TownNPC } from '../src/npcs.ts';
+import { PACK_CELLS } from '../src/inventory-grid.ts';
 
 const npc: TownNPC = {id:'test:stash',buildingId:'test',role:'stash',name:'Storage',seed:1,level:1,x:0,y:0};
 const world = {blocked:()=>false,move:(x:number,y:number)=>({x,y})};
@@ -176,12 +177,12 @@ test('bulk retrieve empties the chosen slots and refuses a batch the pack cannot
   const charms=wealthy(); charms.stash=Array(STASH_CAPACITY).fill(null);
   charms.inventory=Array(charms.inventory.length).fill(null); charms.inventoryLayout={};
   charms.stash[0]=generateItem(86000,1,'charm'); charms.stash[1]=generateItem(86001,1,'ring');
-  for(let seed=86100;addInventoryItem(charms,generateItem(seed,1,'charm'));seed++);
+  for(let i=0;i<PACK_CELLS-1;i++)assert.ok(addInventoryItem(charms,generateItem(86100+i,1,'ring')));
   const mixed=[0,1].map(slot=>({slot,id:charms.stash![slot]!.id,revision:charms.stash![slot]!.recipe.revision}));
   const cramped=quoteService(charms,npc,1,{type:'retrieveMany',items:mixed});
-  assert.equal(cramped.ok,false); assert.match(cramped.ok?'':cramped.message,/Charm grid full/);
-  // The ring still comes out on its own; only the charm region is short on room.
-  assert.ok(quote(charms,{type:'retrieveMany',items:[mixed[1]]}));
+  // Charms come out into the bag like any item, so the batch needs two free bag cells.
+  assert.equal(cramped.ok,false); assert.match(cramped.ok?'':cramped.message,/Bag full/);
+  assert.ok(quote(charms,{type:'retrieveMany',items:[mixed[0]]}));
 });
 
 test('rearranging a tab swaps two of its slots and never reaches across tabs', () => {

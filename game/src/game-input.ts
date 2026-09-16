@@ -1,10 +1,7 @@
 import type { Input } from './model.ts';
 
-const MOVEMENT = {
-  right: ['KeyD', 'ArrowRight'], left: ['KeyA', 'ArrowLeft'],
-  down: ['KeyS', 'ArrowDown'], up: ['KeyW', 'ArrowUp'],
-} as const;
-const GAME_KEYS = new Set<string>([...Object.values(MOVEMENT).flat(), 'Space', 'KeyQ', 'Digit1', 'Digit2', 'Digit3', 'Digit4']);
+import { ControlBindings, SKILL_ACTIONS, isMovementAction, type ControlAction } from './control-bindings.ts';
+
 type Point = { x: number; y: number };
 type PointerBounds = { left: number; top: number; width: number; height: number };
 
@@ -13,27 +10,33 @@ export class GameInput {
   readonly pointer = { x: 0, y: 0, present: false };
   private keys = new Set<string>();
   private buttons = new Set<number>();
+  private pointerUIBlocked = false;
   private pendingSkill: number | null = null;
   private pending = { attack: false, dodge: false, heal: false };
 
+  private readonly bindings: ControlBindings;
+  constructor(bindings = new ControlBindings()) { this.bindings = bindings; }
+
+  private press(action: ControlAction | undefined): void {
+    if (action === 'attack' || action === 'dodge' || action === 'heal') this.pending[action] = true;
+    const slot = SKILL_ACTIONS.findIndex(id => id === action);
+    if (slot >= 0) this.pendingSkill = slot;
+  }
   keyDown(code: string): void {
-    if (!GAME_KEYS.has(code) || this.keys.has(code)) return;
-    this.keys.add(code);
-    if (code === 'Space') this.pending.dodge = true;
-    if (code === 'KeyQ') this.pending.heal = true;
-    if (/^Digit[1-4]$/.test(code)) this.pendingSkill = Number(code.at(-1));
+    if (this.keys.has(code)) return;
+    this.keys.add(code); this.press(this.bindings.action(code));
   }
-
   keyUp(code: string): void { this.keys.delete(code); }
-
   pointerDown(button: number): void {
-    if ((button !== 0 && button !== 2) || this.buttons.has(button)) return;
-    this.buttons.add(button);
-    if (button === 0) this.pending.attack = true;
-    else this.pendingSkill = 0;
+    if (this.buttons.has(button)) return;
+    this.buttons.add(button); this.press(this.bindings.action(`Mouse${button}`));
   }
-
   pointerUp(button: number): void { this.buttons.delete(button); }
+
+  held(action: ControlAction): boolean {
+    return this.bindings.get(action).some(code => code !== null
+      && (code.startsWith('Mouse') ? this.buttons.has(Number(code.slice(5))) : this.keys.has(code)));
+  }
 
   /** Ignore invalid/hidden surface bounds instead of injecting NaN into aiming. */
   movePointer(clientX: number, clientY: number, bounds: PointerBounds, width: number, height: number): void {
@@ -48,24 +51,39 @@ export class GameInput {
     this.pointer.y = y / bounds.height * height;
   }
 
+  /** Coordinate-based entry also catches canvas-captured drags and panels opening under a held pointer. */
+  setPointerUIBlocked(blocked: boolean): boolean {
+    const entered = blocked && !this.pointerUIBlocked;
+    this.pointerUIBlocked = blocked;
+    if (entered) this.clear();
+    return entered;
+  }
+
   consume(aim: Point, combatBlocked: boolean): Input {
-    const held = (codes: readonly string[]) => codes.some(code => this.keys.has(code));
     const input: Input = {
-      moveX: Number(held(MOVEMENT.right)) - Number(held(MOVEMENT.left)),
-      moveY: Number(held(MOVEMENT.down)) - Number(held(MOVEMENT.up)),
+      moveX: Number(this.held('right')) - Number(this.held('left')),
+      moveY: Number(this.held('down')) - Number(this.held('up')),
       aimX: aim.x, aimY: aim.y,
-      attack: !combatBlocked && (this.buttons.has(0) || this.pending.attack),
+      attack: !combatBlocked && (this.held('attack') || this.pending.attack),
       dodge: this.pending.dodge, heal: this.pending.heal,
-      skillSlot: combatBlocked ? null : this.pendingSkill ?? (this.buttons.has(2) ? 0 : null),
+      ...(this.pendingSkill===null&&this.held('skill0')?{skillPressed:false}:{}),
+      heldSkillSlots: combatBlocked?[]:[...(this.held('skill0')?[0]:[]),...[1,2,3,4].filter(n=>this.held(SKILL_ACTIONS[n]))],
+      skillSlot: combatBlocked ? null : this.pendingSkill ?? (this.held('skill0') ? 0 : null),
     };
     this.pending.attack = this.pending.dodge = this.pending.heal = false;
     this.pendingSkill = null;
     return input;
   }
 
-  /** Blur, pause, map entry, cancellation, and restart discard all held/queued input. */
-  clear(): void {
-    this.keys.clear(); this.buttons.clear();
+  /** Tab transitions retain movement, loot reveal and mouse holds; pause/blur discard everything. */
+  clear(preserveMovement = false): void {
+    if (preserveMovement) {
+      for (const key of this.keys) {
+        const action = this.bindings.action(key);
+        if (!isMovementAction(action) && action !== 'revealLoot') this.keys.delete(key);
+      }
+    } else this.keys.clear();
+    if (!preserveMovement) this.buttons.clear();
     this.pending.attack = this.pending.dodge = this.pending.heal = false;
     this.pendingSkill = null;
   }

@@ -31,6 +31,7 @@ Nearest settlement lookup checks nine seeded geography anchors, then loads only 
 - Caravans/reliquaries: finish the existing choice or treasure claim.
 - Watchtowers: activate the beacon.
 - Graveyards/standing stones: finish the guardians and claim the reward/blessing.
+- Wilderness bosses: defeat the boss, then wait for the complete physical hoard to be delivered. Guidance reports the pending delivery instead of asking for another kill.
 - Crypts: defeat the Warden and fully claim the final chest. Boss death alone is not completion.
 - Towns/frontiers: arrive within the objective's radius on the surface.
 
@@ -54,7 +55,7 @@ A brief **Journey complete** celebration shows the activity name and actual bonu
 
 ## Navigation
 
-One pale-gold diamond links the pinned activity, or the recommendation when unpinned, to maps and its visible world anchor. The minimap clamps offscreen bearings to its edge. Show on map inspects another lead without accepting it. Unknown sites expose a coarse 768-unit search cell, never hidden terrain or exact POI coordinates. Normal discovery reveals the anchor. Underground, outside objectives point toward the entrance, and crypt objectives only identify discovered rooms. Useful saved return portals become the next marker while in town.
+One pale-gold destination flag links the pinned activity, or the recommendation when unpinned, to maps and its visible world anchor. The minimap clamps offscreen bearings to its edge. Show on map inspects another lead without accepting it. On the surface, the map opens on the player, holds briefly, then eases to the objective and marks arrival with gold rings, preserving zoom. Direct pan/zoom input cancels the motion; reduced motion centers immediately with a stationary highlight. Unknown sites expose a coarse 768-unit search cell, never hidden terrain or exact POI coordinates. Normal discovery reveals the anchor. Underground, outside objectives point toward the entrance, and crypt objectives only identify discovered rooms. Useful saved return portals become the next marker while in town.
 
 Bearings are not walking paths. Recommendation scoring checks coarse approach danger and road access, including escape from a higher-level district, but does not solve terrain-aware routing. Geography and build suitability need player testing.
 
@@ -75,3 +76,5 @@ Activity names match across the mini log, journal and markers. Distances use met
 ## Dungeon objectives
 
 Inside either a wilderness dungeon or an expedition stage, the journal and HUD automatically show the current dungeon objective instead of surface activities: defeat its named boss, claim the final chest, then return to the surface. The dungeon-map marker uses the actual generated boss room; unexplored chambers are approached through the revealed route. Grand-chest guidance waits for all reward receipts. This is a temporary presentation derived from the active run, so outdoor pins and offers are not replaced or lost.
+
+Map search areas use a magnifying glass inside the approximate dashed circle; offscreen guidance uses a bold direction chevron. The shared Canvas silhouettes live in `map-symbol-art.ts`. This changes presentation only; guidance, discovery and pin ownership are unchanged.
