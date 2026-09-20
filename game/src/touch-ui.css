@@ -1,4 +1,6 @@
 /* Input-specific presentation. Desktop selectors and layout remain unchanged. */
+/* Keep the page default before the drag controls' touch-action overrides. */
+html.touch-mode, .touch-mode :where(#app,#app *) { touch-action: manipulation; }
 .touch-hud { --touch-footer-clearance: calc(max(96px, 14vh) + env(safe-area-inset-bottom)); position: absolute; inset: 0; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); z-index: 8; pointer-events: none; font: 14px var(--ui-font); color: var(--ui-text); user-select: none; -webkit-user-select: none; }
 .touch-hud[hidden] { display: none; }
 .touch-mode #game { touch-action: none; }
@@ -46,6 +48,7 @@
 .touch-mode .character-columns { display: block; overflow: auto; }
 .touch-mode .character-columns > section { display: none; padding: 12px; overflow: visible; }
 .touch-mode .character-window[data-touch-tab="bag"] .character-inventory, .touch-mode .character-window[data-touch-tab="equipment"] .character-equipment, .touch-mode .character-window[data-touch-tab="stats"] .character-details { display: block; }
+.touch-mode .character-window[data-touch-tab="equipment"] .character-equipment { display: flex; }
 .touch-mode .character-bag { min-width: 0; grid-template-columns: repeat(auto-fit,minmax(48px,1fr)); }
 .touch-mode .character-grid-scroll { overflow: visible; }
 .touch-item-sheet { position: absolute; z-index: 12; inset: auto 8px 8px; max-height: 85%; overflow: auto; border: 1px solid var(--ui-silver-dim); border-radius: 12px; background: #0c1822fc; padding: 12px; box-shadow: 0 -8px 35px #0008; }
@@ -75,8 +78,8 @@
 }
 .touch-mode .journey-mini { max-width: 195px; }
 .touch-mode .crypt-map { padding: max(8px,env(safe-area-inset-top)) 8px; }
-.touch-mode .crypt-map .ui-window { display: flex; flex-direction: column; max-height: calc(var(--touch-vh,100dvh) - 16px); overflow: auto; }
-.touch-mode .crypt-map canvas { flex: none; height: auto; aspect-ratio: 1200 / 760; max-height: none; }
+.touch-mode .crypt-map .ui-window { display: flex; flex-direction: column; max-height: calc(var(--touch-vh,100dvh) - 16px); overflow: hidden; }
+.touch-mode .crypt-map .crypt-map-canvas { height: 100%; aspect-ratio: auto; max-height: none; }
 .touch-mode .crypt-touch-zoom { gap: 8px; padding: 8px; justify-content: center; }
 .touch-mode .title-screen.is-busy::after { content: 'Saving…'; position: fixed; inset: auto 25% 15%; padding: 20px; background: #101d29f5; border: 1px solid #8aa2ab; text-align: center; z-index: 80; }
 @media (max-width: 620px) {
@@ -140,7 +143,6 @@
 .touch-mode :is(.character-heading,.character-header-right,.world-map-heading) { gap: 6px; min-width: 0; }
 .touch-mode .character-heading { flex: 1; }
 .touch-mode .character-header-right { flex: none; }
-.touch-mode .character-level { font-size: 11px; }
 .touch-mode .character-tabs { padding: 0; gap: 3px; flex: none; }
 .touch-mode .character-tabs .ui-button { padding-inline: 9px; }
 .touch-mode .character-columns > section { padding: 6px 10px; }
@@ -166,7 +168,6 @@
 }
 
 /* Suppress native page gestures without swallowing panel scroll or game pinch input. */
-html.touch-mode, .touch-mode :where(#app,#app *) { touch-action: manipulation; }
 .touch-mode :where(#app,#app *) { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .touch-mode :is(input,textarea,[contenteditable="true"]) { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 .touch-install-help { flex-basis: 100%; margin: 4px 0 0; font: 12px/1.4 var(--ui-font); color: var(--ui-silver); }

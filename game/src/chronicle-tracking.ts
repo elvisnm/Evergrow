@@ -1,3 +1,4 @@
+import { discoverUnique } from './unique-collection.ts';
 import { projectileDamageType } from './resistance-content.ts';
 import { isBossKind, isWildernessBoss } from './wilderness-boss-content.ts';
 import { metric, type ChronicleProgress } from './chronicle.ts';
@@ -18,7 +19,7 @@ export function trackChronicleEvent(p:Player,enemies:readonly Enemy[],e:CombatEv
    if(enemy){metric(c,'rank:'+enemy.rank);metric(c,'highestEnemy',enemy.level);if(enemy.rank==='elite'&&p.hp/p.maxHp<.1)metric(c,'feat:lastbreath');
      if(isBossKind(enemy.kind))metric(c,'bosses');
      if(isWildernessBoss(enemy.kind))metric(c,'boss:'+enemy.kind);
-     if(enemy.campMemberId==='warden')metric(c,'crypts');}
+     if(enemy.campMemberId==='warden'&&!enemy.campId?.startsWith('dungeon:rift:'))metric(c,'crypts');}
    break;}
  case 'hurt': metric(c,'damageTaken',e.actualValue??e.value);if(e.remainingHp===0){metric(c,'deaths');const s=c.sources.find(s=>s.id===c.active)!;metric(c,'highestDeathTime',s.values.time??0);}break;
  case 'heal':metric(c,'healing',e.value);break;
@@ -27,7 +28,7 @@ export function trackChronicleEvent(p:Player,enemies:readonly Enemy[],e:CombatEv
  case 'dodge':metric(c,'dodges');break;
  case 'block':metric(c,'blocks');metric(c,'damageBlocked',e.value);break;
  case 'gold':metric(c,'goldFound',e.amount);metric(c,'goldEarned',e.amount);metric(c,'largestGold',e.amount);break;
- case 'loot':metric(c,'items');metric(c,'items:'+e.item.tier);metric(c,'itemKind:'+e.item.kind);if(e.item.recipe.materialId)metric(c,'material:'+e.item.recipe.materialId);break;
+ case 'loot':discoverUnique(c,e.item,Date.now());metric(c,'items');metric(c,'items:'+e.item.tier);metric(c,'itemKind:'+e.item.kind);if(e.item.recipe.materialId)metric(c,'material:'+e.item.recipe.materialId);break;
  case 'journey':metric(c,'journeys');break;
  case 'experience':metric(c,'xp',e.amount);break;
  case 'level':metric(c,'highestLevel',e.level);break;

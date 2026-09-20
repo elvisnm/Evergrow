@@ -1,3 +1,4 @@
+import { PACK_CELLS } from './inventory-grid.ts';
 import { createCharacterSheet, generateItem, deriveItem, EQUIPMENT_SLOTS } from './items.ts';
 import { characterModifierSources } from './character-stats.ts';
 import { getTreeBonuses } from './skill-tree.ts';
@@ -24,7 +25,7 @@ export function benchmarkSheet(level:number, style:BenchmarkStyle, gear:Benchmar
   sheet.skillPoints=level-1;
   const skill=BENCHMARK_SKILLS[style];
   allocateSkillRoute(sheet,`skill:${skill}`);
-  const rank=Math.min(strong?5:3,1+sheet.skillPoints);
+  const rank=Math.min(strong?3:2,1+sheet.skillPoints);
   sheet.skillRanks[skill]=rank;sheet.skillPoints-=rank-1;sheet.skillSlots[0]=skill;
   for(const [index,slot] of EQUIPMENT_SLOTS.entries()) {
     if(slot==='offhand'){sheet.equipped[slot]=null;continue;}
@@ -38,6 +39,7 @@ export function benchmarkSheet(level:number, style:BenchmarkStyle, gear:Benchmar
     // Deliberately selected recovery rolls: eight stones or the extreme full-grid case.
     item.affixes=[{name:'Clarity',stat:'manaRegen',value:1}];item.recipe.rolls=[.5];
     if(!addInventoryItem(sheet,deriveItem(item)))throw new Error('Benchmark charm does not fit');
+    sheet.inventoryLayout![item.id]=PACK_CELLS+i;
   }
   return sheet;
 }

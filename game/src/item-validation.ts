@@ -1,3 +1,5 @@
+import { validRiftKey } from './rift-content.ts';
+import { uniqueDefinition } from './unique-content.ts';
 import { charmProfile, charmThematicStat } from './charm-content.ts';
 import { isResistanceStat, resistanceAffixLimit } from './resistance-content.ts';
 import { JEWELRY_PROFILES } from './jewelry-content.ts';
@@ -7,7 +9,7 @@ import { isSkillStat, skillAffixRank } from './equipment-affix-content.ts';
 import { isElementalAffix, meleeEnchantment } from './elemental-weapon.ts';
 import { FOCUS_PROFILES } from './focus-content.ts';
 import type { Item } from './character-types.ts';
-import { ITEM_KINDS, TIER_NAMES, STAT_LABELS, itemAffixCount, itemAffixPool } from './items.ts';
+import { ITEM_KINDS, TIER_NAMES, STAT_LABELS, itemAffixCount, itemAffixPool, deriveItem } from './items.ts';
 import { WEAPON_PROFILES, SHIELD_PROFILES } from './weapon-content.ts';
 import { STARTING_SWORD } from './equipment.ts';
 import { MAX_CONTENT_LEVEL } from './progression-content.ts';
@@ -21,6 +23,7 @@ const oneOf = (v: unknown, values: readonly unknown[]) => values.includes(v);
 const modifiers = (v: unknown) => object(v) && Object.keys(v).every(key => Object.hasOwn(STAT_LABELS, key) && number(v[key], -1e9, 1e9));
 
 export function validItem(v: unknown): v is Item {
+  if (object(v) && v.kind === 'riftKey') return validRiftKey(v);
   if (!object(v) || v.locked !== undefined && typeof v.locked !== 'boolean' || !text(v.id, 160) || !integer(v.seed, -2147483648, 4294967295) || !text(v.name)
     || !text(v.baseName) || !oneOf(v.kind, ITEM_KINDS) || !Object.hasOwn(TIER_NAMES, String(v.tier))
     || !integer(v.itemLevel, 1, MAX_CONTENT_LEVEL) || !integer(v.requiredLevel, 1, MAX_CONTENT_LEVEL)
@@ -37,6 +40,11 @@ export function validItem(v: unknown): v is Item {
     || v.affixes.length !== (v.kind === 'charm' && r.charmVersion === undefined ? (charmProfile(v as unknown as Item)?.size.affixes ?? 1) + ['common','magic','rare','epic','legendary'].indexOf(v.tier as string) : itemAffixCount(v as unknown as Item))) return false;
   if (r.materialId !== undefined && (typeof r.materialId !== 'string' || !Object.hasOwn(ITEM_MATERIALS, r.materialId) || !itemMaterialPool(v.kind as Item['kind'], object(v.weapon) ? v.weapon.family as NonNullable<Item['weapon']>['family'] : undefined).some(m => m.id === r.materialId))) return false;
   if (v.kind === 'charm' && r.charmVersion === 1 && !charmThematicStat(v as unknown as Item, v.affixes[0]?.stat as Item['affixes'][number]['stat'])) return false;
+  if (v.tier === 'unique') {
+    const u=uniqueDefinition(v as unknown as Item);
+    if(!u||u.kind!==v.kind||u.profile!==r.profileId||u.material!==r.materialId||r.starter||r.targetedRolls||r.fullRolls
+      ||v.name!==u.name||v.affixes.some((a,i)=>a.stat!==u.affixes[i]||(r.rolls as number[])[i]!==.75))return false;
+  } else if(r.uniqueId!==undefined)return false;
   const profile = r.profileId;
   if (v.kind === 'charm' && (!charmProfile(v as unknown as Item) || r.materialId !== undefined || r.starter || Object.keys(v.implicit as ObjectValue).length || v.affixes.some(a=>!itemAffixPool(v as unknown as Item).some(d=>d.stat===a.stat)))) return false;
   if (v.kind === 'weapon' && !(profile === STARTING_SWORD.id || WEAPON_PROFILES.some(p => p.id === profile))) return false;
@@ -85,5 +93,13 @@ export function validItem(v: unknown): v is Item {
       || f.visual.kind !== p.visual.kind || f.visual.motif !== p.visual.motif
       || !['base', 'edge', 'trim', 'shadow', 'glow'].every(key => color((f.visual as ObjectValue)[key]))) return false;
   } else if (v.focus !== undefined) return false;
+  if(v.tier==='unique'){
+    // Power is a recalculated presentation cache, not part of the fixed combat recipe.
+    try{
+      const expected=deriveItem(v as unknown as Item);
+      if(JSON.stringify(expected.affixes)!==JSON.stringify(v.affixes)||JSON.stringify(expected.implicit)!==JSON.stringify(v.implicit)
+        ||expected.requiredLevel!==v.requiredLevel||expected.weapon?.damage!==(v.weapon as Item['weapon'])?.damage)return false;
+    }catch{return false;}
+  }
   return true;
 }

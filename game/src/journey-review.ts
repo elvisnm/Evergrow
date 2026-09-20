@@ -15,7 +15,7 @@ import { Exploration } from './exploration.ts';
 import { WorldMap } from './world-map.ts';
 import { JourneyPanel } from './journey-panel.ts';
 import { freshJourneys, planJourney, type JourneyGoal } from './journey-state.ts';
-import { publicJourneyMarker, questDiamond } from './journey-marker.ts';
+import { publicJourneyMarker, drawJourneyDestination } from './journey-marker.ts';
 import { getZoneAt } from './zone-progression.ts';
 import { Lifetime } from './lifetime.ts';
 // Frozen real UI, memory-only chart and staged goals. No gameplay ticks or character storage.
@@ -53,15 +53,16 @@ function draw(){
   const height=Math.min(680,Math.max(450,Math.round(innerHeight/1.35)));
   renderer.resize(Math.max(540,Math.round(height*innerWidth/innerHeight)),height);
   renderer.cameraX=p.x;renderer.cameraY=p.y-30;
-  const settings={phase:'playing' as const,reducedMotion:true,debug:false,fps:60};
+  const settings={phase:'playing' as const,reducedMotion:true};
   renderer.render(sim,world,0,settings);fx.render(renderer.canvas,0);
   const c=shell.uiCanvas.getContext('2d')!;c.setTransform(shell.uiCanvas.width/renderer.width,0,0,shell.uiCanvas.height/renderer.height,0,0);
   c.clearRect(0,0,renderer.width,renderer.height);renderer.renderUI(c,sim,world,settings);
   map.drawMinimap(c,p,renderer.width,renderer.height,0);
   const anchor=world.getEventSites(camp.x-300,camp.y-300,600,600).find(s=>s.id===camp.id)??camp;
-  const point=renderer.worldToScreen(anchor.x,anchor.y);if(!completion)questDiamond(c,point.x,point.y-35,8);
+  const point=renderer.worldToScreen(anchor.x,anchor.y);if(!completion)drawJourneyDestination(c,point.x,point.y-35,8);
   if(completion)drawJourneyAnnouncement(c,{...completion,age:.8},renderer.worldToScreen(p.x,p.y),renderer.width,renderer.height,true);
-  shell.resizeControls(renderer.width,renderer.height);shell.showMenu('playing',0,0);shell.setPortalState(new URLSearchParams(location.search).has('casting') ? .4 : null,false);
+  const casting=new URLSearchParams(location.search).has('casting');
+  shell.resizeControls(renderer.width,renderer.height);shell.showMenu('playing',0,0);shell.setPortalState({mode:casting?'cancel':'cast',progress:casting ? .4 : null,destination:{kind:'settlement',name:'Home town',detail:'Home town',biome:'deadwood'}});
   panel.update(sim.journeys,facts(),(mode==='hud'||mode==='complete')&&panel.element.hidden,renderer.width,renderer.height);
 }
 draw();if(mode==='journal'||mode==='crypt')openPanel();else if(mode==='map')showMap();

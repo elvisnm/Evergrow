@@ -105,15 +105,15 @@ test('delayed area offense is copied at scheduling and retained after equipment 
 });
 
 test('Iron Aegis gains duration at every rank after reduction caps, including equipment ranks',()=>{
-  const h=setup('bulwark','bulwark-reduction');let previous=resolveSkill('bulwark',h.p.derived,h.p.character,3);
-  for(let rank=4;rank<=7;rank++){
+  const h=setup('bulwark','bulwark-reduction');let previous=resolveSkill('bulwark',h.p.derived,h.p.character,16);
+  for(let rank=17;rank<=20;rank++){
     const next=resolveSkill('bulwark',h.p.derived,h.p.character,rank);
     assert.ok(next.recipe.kind==='guard'&&previous.recipe.kind==='guard');
-    close(next.recipe.reduction,.9);close(next.recipe.duration,previous.recipe.duration+.25);previous=next;
+    close(next.recipe.reduction,.9);close(next.recipe.duration,previous.recipe.duration+.05);previous=next;
   }
   h.p.derived.skillBonuses = { bulwark: 2 };
-  const geared = resolveSkill('bulwark',h.p.derived,h.p.character,3);
-  assert.ok(geared.recipe.kind === 'guard');close(geared.recipe.duration,2.5);
+  const geared = resolveSkill('bulwark',h.p.derived,h.p.character,20);
+  assert.ok(geared.recipe.kind === 'guard');close(geared.recipe.duration,3.05);close(geared.recipe.reduction,.9);
 });
 
 test('Executioner penalizes frontal hits only and Shattered Sky has a smaller authored footprint',()=>{
@@ -163,11 +163,11 @@ test('skill crescents cover actual contact geometry across facings, hands and sp
   }
 });
 
-test('variant previews show prospective passives without mutating the character or selecting the variant',()=>{
+test('variant previews show direct Techniques without mutating the character or selecting the variant',()=>{
   const h=setup('fireball');const before=JSON.stringify(h.p.character);
   const preview=previewSkillVariant('fireball-fork',h.p.derived,h.p.character)!;
-  close(preview.after.damageMultiplier,SKILL_DEFINITIONS.fireball.damageMultiplier*.65*1.06);
-  assert.equal(preview.after.mana,20.7);assert.equal(JSON.stringify(h.p.character),before);
+  close(preview.after.damageMultiplier,SKILL_DEFINITIONS.fireball.damageMultiplier*.65);
+  assert.equal(preview.after.mana,21.6);assert.equal(JSON.stringify(h.p.character),before);
 });
 
 test('sustained feedback outlives cast recovery and skill audio distinguishes impact families',()=>{

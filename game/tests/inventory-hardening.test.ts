@@ -66,7 +66,7 @@ test('validated old charms rebalance deterministically on load without losing it
 
 test('item locks and explicit active-charm consent are enforced by transaction owners',async()=>{
   const sim=new Simulation(world,{spawn:false}),s=sim.player.character,stone=generateItem(88,1,'charm','jade-pebble','common'),ring=generateItem(89,1,'ring');
-  addInventoryItem(s,stone);addInventoryItem(s,ring);
+  addInventoryItem(s,stone);s.inventoryLayout![stone.id]=PACK_CELLS;addInventoryItem(s,ring);
   assert.deepEqual(bulkSaleItems(s,1).map(i=>i.id),[ring.id]);
   const items=[{bag:0,id:stone.id,revision:0}];
   assert.equal(quoteService(s,smith,1,{type:'sellMany',items}).ok,false);
@@ -92,7 +92,7 @@ test('bounded packing recovers a fragmented layout without losing items or chang
 
 test('replacement compares several active stones to one stored stone without moving anything',()=>{
   const s=createCharacterSheet();
-  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS;i++)addInventoryItem(s,generateItem(8000+i,10,'charm','jade-pebble','common'));
+  for(let i=0;i<PACK_COLUMNS*CHARM_ROWS;i++){const item=generateItem(8000+i,10,'charm','jade-pebble','common');addInventoryItem(s,item);s.inventoryLayout![item.id]=PACK_CELLS+i;}
   const incoming=generateItem(9000,10,'charm','storm-monolith','legendary');s.stash=Array(96).fill(null);s.stash[0]=incoming;
   const before=structuredClone(s),ids=[0,1,2,3,4,5,6,7].map(i=>s.inventory[i]!.id);
   assert.equal(previewCharmReplacement(s,10,incoming.id,[]).ok,false);
@@ -100,7 +100,7 @@ test('replacement compares several active stones to one stored stone without mov
   assert.deepEqual(s,before);assert.equal(activeCharms(s,10).length,PACK_COLUMNS*CHARM_ROWS);
   assert.equal(previewCharmReplacement(s,1,incoming.id,ids).ok,false);
   assert.equal(previewCharmReplacement(s,10,incoming.id,[ids[0],ids[0]]).ok,false);
-  assert.match(packSpaceProblem(s,incoming),/full/);
+  assert.match(packSpaceProblem(s,incoming,'charms'),/Charm grid full/);
 });
 
 test('city preferences still apply to later charm rolls when the thematic first roll has one category',()=>{
@@ -142,7 +142,7 @@ test('selecting every sellable item quotes cleanly past locked items and active 
   // hands the receipt can never be the one the quote rejects as locked or unconsented.
   const sim=new Simulation(world,{spawn:false}),s=sim.player.character;
   const stone=generateItem(91,1,'charm','jade-pebble','common'),ring=generateItem(92,1,'ring'),helm=generateItem(93,1,'head');
-  addInventoryItem(s,stone);addInventoryItem(s,ring);addInventoryItem(s,helm);
+  addInventoryItem(s,stone);s.inventoryLayout![stone.id]=PACK_CELLS;addInventoryItem(s,ring);addInventoryItem(s,helm);
   assert.ok(setItemLock(s,ring.id,true).ok);
   const selection=(items:readonly {id:string;recipe:{revision:number}}[])=>items.map(item=>({bag:s.inventory.findIndex(owned=>owned?.id===item.id),id:item.id,revision:item.recipe.revision}));
   const eligible=bulkSaleItems(s,1);
@@ -151,4 +151,15 @@ test('selecting every sellable item quotes cleanly past locked items and active 
   const consented=bulkSaleItems(s,1,true);
   assert.deepEqual(consented.map(i=>i.id),[stone.id,helm.id]);
   assert.equal(quoteService(s,smith,1,{type:'sellMany',items:selection(consented),includeActiveCharms:true}).ok,true);
+});
+
+test('comparing a bagged charm proposes activation without activating other bagged stones',()=>{
+  const s=createCharacterSheet();
+  const candidate=generateItem(501,10,'charm','storm-monolith','legendary');
+  const other=generateItem(502,10,'charm','jade-pebble','common');
+  assert.ok(addInventoryItem(s,candidate));assert.ok(addInventoryItem(s,other));
+  const before=structuredClone(s),layout=resolvePackLayout(s);
+  const preview=previewCharmReplacement(s,10,candidate.id,[]);assert.ok(preview.ok);
+  assert.ok(preview.layout[candidate.id]>=PACK_CELLS);assert.equal(preview.layout[other.id],layout[other.id]);
+  assert.ok(preview.changes.length>0);assert.deepEqual(s,before);assert.equal(activeCharms(s).length,0);
 });

@@ -11,10 +11,12 @@ export type StatKey = Attribute | ResistanceStat | 'goldFindPercent' | 'xpGainPe
   | 'lifeRegen' | 'manaCostPercent' | 'cooldownPercent' | 'lifeOnHit' | 'blockChance' | 'blockReduction' | 'fireDamage' | 'frostDamage' | 'lightningDamage';
 export type StatModifiers = Partial<Record<StatKey, number>>;
 export type EquipmentSlot = 'weapon' | 'offhand' | 'head' | 'chest' | 'gloves' | 'legs' | 'boots' | 'cloak' | 'amulet' | 'ring1' | 'ring2';
-export type ItemKind = Exclude<EquipmentSlot, 'offhand' | 'ring1' | 'ring2'> | 'ring' | 'shield' | 'grimoire' | 'orb' | 'charm';
-export type ItemTier = 'common' | 'magic' | 'rare' | 'epic' | 'legendary';
+export type ItemKind = Exclude<EquipmentSlot, 'offhand' | 'ring1' | 'ring2'> | 'ring' | 'shield' | 'grimoire' | 'orb' | 'charm' | 'riftKey';
+export type ItemTier = 'common' | 'magic' | 'rare' | 'epic' | 'legendary' | 'unique';
 export interface ItemAffix { name: string; stat: StatKey; value: number; }
 export interface ItemRecipe {
+  riftKeyTier?: number;
+  uniqueId?: string;
   charmVersion?: 1;
   manaVersion?: 1;
   offenseVersion?: 1;
@@ -25,6 +27,8 @@ export interface ItemRecipe {
 }
 export interface CommerceState {
   epoch: number; revision: number; operations: number; sold: Record<string, number>;
+  /** Paid stock generations, scoped to the current level epoch and vendor. */
+  refreshes?: Record<string, number>;
   buyback: Array<{ item: Item; price: number }>;
 }
 export interface Item {
@@ -35,10 +39,12 @@ export interface Item {
   implicit: StatModifiers; affixes: ItemAffix[]; weapon?: WeaponDefinition; shield?: ShieldDefinition; focus?: FocusDefinition;
   appearance: { surface?: GearMaterial; base: string; shadow: string; edge: string; trim: string; style: 'plate' | 'leather' | 'cloth' };
 }
-export type SkillId = 'cleave' | 'lunge' | 'whirlwind' | 'earthshatter' | 'shieldBash' | 'bulwark'
+export type SkillId = import('./aura-content.ts').AuraId | 'repulse' | 'ironCitadel' | 'smokeVeil' | 'nightReaping' | 'sidestep' | 'brace' | 'runicWard' | 'vaultingShot' | 'rallyOfIron' | 'ghostHunt' | 'cleave' | 'lunge' | 'whirlwind' | 'earthshatter' | 'shieldBash' | 'bulwark'
   | 'volley' | 'piercingShot' | 'ricochet' | 'rainOfArrows' | 'backstab'
   | 'cataclysm' | 'tempest' | 'absoluteZero' | 'fireball' | 'arcLightning' | 'iceNova' | 'frostLance' | 'meteor' | 'siphon';
 export interface CharacterSheet extends GoldWallet {
+  treeVersion?: number;
+  treeRefunded?: true;
   look: import('./character-look.ts').CharacterLook;
   blessing?: import('./poi-content.ts').Blessing;
   commerce: CommerceState;
@@ -62,6 +68,7 @@ export interface CharacterSheet extends GoldWallet {
   arcaneOverload: boolean;
 }
 export interface DerivedCharacterStats {
+  directDamageMultiplier?: number;
   resistances: Record<Element, number>; goldFindMultiplier: number; xpGainMultiplier: number;
   attackSpeedMultiplier: number; castSpeedMultiplier: number; attackDamageMultiplier: number;
   maxHp: number; maxMana: number; armor: number; damageReduction: number;

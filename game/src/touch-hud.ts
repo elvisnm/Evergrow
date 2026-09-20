@@ -1,9 +1,14 @@
+import { isAura } from './aura-content.ts';
+import { auraPower, manaCapacity } from './auras.ts';
+import { lungeReturn } from './unique-combat.ts';
 import { basicAttackWeapon } from './equipment.ts';
 import { PORTAL_RULES } from './travel.ts';
+import { portalDestinationLabel, type PortalActionView } from './portal-destination.ts';
 import { TouchInput, type TouchAction } from './touch-input.ts';
 import { touchTargeting } from './touch-targeting.ts';
 import { resolveSkill } from './skill-progression.ts';
-import { canUseSkill, SKILL_DEFINITIONS, skillIconSVG } from './skill-content.ts';
+import { canUseSkill, SKILL_DEFINITIONS } from './skill-content.ts';
+import { skillIconSVG } from './skill-icon.ts';
 import { basicAttackManaCost } from './equipment.ts';
 import { uiIcon } from './ui-components.ts';
 import { skillSustain } from './skill-sustain.ts';
@@ -71,7 +76,7 @@ export class TouchHUD {
       const id = this.player?.character.skillSlots[slot];
       if (slot >= 0 && (!id || !this.player)) return;
       if (id && this.player && !canUseSkill(id, this.player.equipment)) { this.actions.notice('Equip a compatible weapon to use this skill.'); return; }
-      if(id && this.player) {
+      if(id && this.player && !(id==='lunge'&&lungeReturn(this.player))) {
         const cooldown=this.player.skillCooldowns[id]??0, cost=resolveSkill(id,this.player.derived,this.player.character).mana;
         if(cooldown>0 || this.player.mana<cost) { this.actions.notice(cooldown>0?'Skill is recharging.':'Not enough mana.'); return; }
       }
@@ -168,7 +173,7 @@ export class TouchHUD {
     if(this.element.hidden !== hidden) this.element.hidden = hidden;
     if(!this.active || !enabled || now < this.nextUpdate) return;
     this.nextUpdate = now+75;
-    for(const [kind,value,max] of [['life',player.hp,player.maxHp],['mana',player.mana,player.maxMana]] as const) {
+    for(const [kind,value,max] of [['life',player.hp,player.maxHp],['mana',player.mana,manaCapacity(player)]] as const) {
       const el = this.element.querySelector<HTMLElement>(`.touch-${kind}`)!;
       el.setAttribute('aria-valuenow',String(Math.ceil(value))); el.setAttribute('aria-valuemax',String(max));
       el.querySelector('span')!.textContent = `${Math.ceil(value)} / ${max}`;
@@ -180,27 +185,33 @@ export class TouchHUD {
     for(let i=0;i<5;i++) {
       const id = player.character.skillSlots[i], el = this.element.querySelector<HTMLButtonElement>(`[data-touch-action="skill-${i}"]`)!;
       if(this.icons.get(i)!==id) { el.querySelector('.touch-icon')!.innerHTML = id ? skillIconSVG(id,29) : ''; this.icons.set(i,id); }
-      const cooldown = id ? player.skillCooldowns[id]??0 : 0;
-      const cost = id ? resolveSkill(id,player.derived,player.character).mana : 0;
+      const returning=id==='lunge'?lungeReturn(player):undefined;
+      const cooldown = id && !returning ? player.skillCooldowns[id]??0 : 0;
+      const cost = id && !returning ? resolveSkill(id,player.derived,player.character).mana : 0;
       el.classList.toggle('is-unavailable',!id || cooldown>0 || player.mana<cost || !canUseSkill(id,player.equipment));
       el.setAttribute('aria-label',id ? `${SKILL_DEFINITIONS[id].name}${cooldown>0?`, ${cooldown.toFixed(1)} seconds`:player.mana<cost?', Not enough mana':''}` : `Empty skill ${i+1}`);
       const sustain = skillSustain(id, player, effects);
       el.classList.toggle('is-sustained', !!sustain);
+      if(id&&isAura(id)&&auraPower(player,id))el.setAttribute('aria-label',`${SKILL_DEFINITIONS[id].name}, aura active, ${resolveSkill(id,player.derived,player.character).reservation}% mana reserved`);
       if (sustain) el.setAttribute('aria-label', `${SKILL_DEFINITIONS[id!].name}, active ${sustain.remaining.toFixed(1)} seconds${sustain.upkeep ? `, ${sustain.upkeep} mana per second` : ''}, cooldown ${cooldown.toFixed(1)} seconds`);
-      el.querySelector('small')!.textContent = sustain ? `${sustain.remaining.toFixed(1)}s · ${cooldown.toFixed(1)}` : cooldown>0 ? cooldown.toFixed(1) : id ? `${i+1} · ${cost}` : '—';
+      if(returning)el.setAttribute('aria-label',`Lunge, return available for ${returning.remaining.toFixed(1)} seconds`);
+      el.querySelector('small')!.textContent = returning ? `Return ${returning.remaining.toFixed(1)}s` : sustain ? `${sustain.remaining.toFixed(1)}s · ${cooldown.toFixed(1)}` : cooldown>0 ? cooldown.toFixed(1) : id ? `${i+1} · ${cost}` : '—';
     }
     this.element.querySelector('.touch-potion small')!.textContent = player.healCooldown>0 ? player.healCooldown.toFixed(1) : String(player.flasks);
-    this.element.querySelector('.touch-potion')!.classList.toggle('is-unavailable',player.flasks===0||player.healCooldown>0||(player.hp>=player.maxHp&&player.mana>=player.maxMana));
+    this.element.querySelector('.touch-potion')!.classList.toggle('is-unavailable',player.flasks===0||player.healCooldown>0||(player.hp>=player.maxHp&&player.mana>=manaCapacity(player)));
     this.element.querySelector('.touch-dodge small')!.textContent = String(player.dodgeCharges);
     this.element.querySelector('.touch-dodge')!.classList.toggle('is-unavailable',player.dodgeCharges===0);
     this.element.querySelector('.touch-attack')!.classList.toggle('is-unavailable',player.mana<basicAttackManaCost(basicAttackWeapon(player),player.derived));
   }
-  setPortal(progress: number | null, returning: boolean) {
+  setPortal(view: PortalActionView) {
     if(!this.active) return;
+    const { progress, mode, destination } = view;
     const el=this.element.querySelector<HTMLButtonElement>('[data-touch-menu="portal"]')!;
-    const label=progress!==null ? `Cancel portal · ${(PORTAL_RULES.channel*(1-progress)).toFixed(1)} seconds` : returning ? 'Locate return portal' : 'Town portal';
+    const destinationLabel=portalDestinationLabel(destination);
+    const label=progress!==null ? `Cancel portal opening to ${destinationLabel} · ${(PORTAL_RULES.channel*(1-progress)).toFixed(1)} seconds` : mode==='return' ? `Return to ${destinationLabel}` : mode==='locate' ? `Locate return portal to ${destinationLabel}` : mode==='unavailable' ? 'Town portal unavailable in sanctuary. Explore outside the sanctuary to open one' : `Open town portal to ${destinationLabel}`;
     if(el.getAttribute('aria-label')!==label) el.setAttribute('aria-label',label);
-    el.querySelector('small')!.textContent=progress!==null ? 'Cancel' : returning ? 'Return' : 'Portal';
+    el.querySelector('small')!.textContent=progress!==null ? 'Cancel' : mode==='return' ? 'Return' : mode==='locate' ? 'Locate' : mode==='unavailable' ? 'Unavailable' : 'Portal';
+    el.disabled=mode==='unavailable';
     el.classList.toggle('is-held',progress!==null);
   }
   dispose() { this.clear(); this.abort.abort(); this.element.remove(); this.mount.classList.remove('touch-mode'); document.documentElement.classList.remove('touch-mode'); this.mount.classList.remove('touch-phone-landscape'); }

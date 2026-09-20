@@ -14,8 +14,6 @@ export const PLAYER_ART_SCALE = 1.24;
 export const PLAYER_ATTACHMENTS = {
   head: [0, -33], chest: [0, -21], waist: [0, -13],
   leftShoulder: [-6.5, -26], rightShoulder: [6.5, -26],
-  leftHip: [-3.2, -15], rightHip: [3.2, -15],
-  leftFoot: [-3.6, 0], rightFoot: [3.6, 0],
 } as const;
 
 export const WEAPON_REST_ANGLE = 0.46;
@@ -59,15 +57,6 @@ export function getSwingAngle(
   // A short follow-through then reverse along the slash into the same guard.
   const settle = smooth((recovery - 0.14) / 0.86);
   return strikeEnd + (rest - strikeEnd) * settle + 0.22 * Math.sin(recovery * Math.PI) ** 2 * (1 - settle);
-}
-
-/** A planted backstroke followed by a lifted, eased return. */
-export function playerFootCycle(phase: number) {
-  const t = ((phase / (Math.PI * 2)) % 1 + 1) % 1;
-  const stance = .58;
-  if (t < stance) return { travel: 8 - t / stance * 16, lift: 0 };
-  const swing = (t - stance) / (1 - stance);
-  return { travel: -8 + smooth(swing) * 16, lift: Math.sin(swing * Math.PI) ** 1.3 * 4 };
 }
 
 /** Geometry shared by the articulated rig and its attached sword effects. */
@@ -116,6 +105,7 @@ export function playerMotion(pose: CharacterPose) {
   const idleSway = Math.sin(phase + 0.35) * moving * 0.07 + breath * 0.08;
   const attackBlend = !swinging ? 0 : attack < start ? windup : 1 - recovery;
   const mainKind = (pose.weapon ?? STARTING_SWORD.visual).kind;
+  const unarmed = mainKind === 'unarmed';
   const guardedMelee = meleeGuard(mainKind);
   const hilted = mainKind === 'sword' || mainKind === 'dagger';
   const mainGuard = meleeGuardAngle(mainKind, pose.angle, pose.grip !== 'one-handed');
@@ -212,10 +202,26 @@ export function playerMotion(pose: CharacterPose) {
       weaponHand[1] * (1 - cast) + gestureHand[1] * cast, weaponHand[2] * (1 - cast) + gestureHand[2] * cast];
   }
   const bow = pose.weapon?.kind === 'bow', staff = pose.weapon?.kind === 'staff';
-  const independent = pose.grip === 'one-handed';
+  const restingStaffArm = staff && pose.weapon?.element === 'fire';
+  const independent = unarmed || pose.grip === 'one-handed';
   const gripAmount = independent ? 0 : bow || staff ? 1 : 1 - cast;
-  const supportHolding = !independent && (cast < .05 || bow || staff || !!pose.gesture);
+  const supportHolding = !restingStaffArm && !independent && (cast < .05 || bow || staff || !!pose.gesture);
   const rightX = -Math.sin(bodyAngle), rightDepth = Math.cos(bodyAngle);
+  // Empty arms hang just outside the hips, with a shallow elbow bend and a
+  // small opposing swing in travel. Keep these mounts body-relative at every facing.
+  const relaxedWidth = unarmed ? 7.8 : 9;
+  const relaxedHeight = unarmed ? 10.5 : 8;
+  const relaxedHand = (side: number): RigPoint => [
+    rightX * side * relaxedWidth + Math.cos(bodyAngle) + side * step * moveX * .5,
+    rightDepth * side * relaxedWidth + Math.sin(bodyAngle) + side * step * moveY * .5, relaxedHeight,
+  ];
+  if (unarmed) {
+    const relaxed = relaxedHand(1);
+    const actionBlend = Math.max(attackBlend, pose.gesture ? cast : 0);
+    weaponHand = [relaxed[0] * (1 - actionBlend) + weaponHand[0] * actionBlend,
+      relaxed[1] * (1 - actionBlend) + weaponHand[1] * actionBlend,
+      relaxed[2] * (1 - actionBlend) + weaponHand[2] * actionBlend];
+  }
   const guardHand = (side: number): RigPoint => [
     rightX * side * 8 + Math.cos(bodyAngle) * (8 + (pose.guard ?? 0) * 3) - step * moveX * .5,
     rightDepth * side * 8 + Math.sin(bodyAngle) * (8 + (pose.guard ?? 0) * 3) - step * moveY * .5,
@@ -226,7 +232,10 @@ export function playerMotion(pose: CharacterPose) {
     weaponHand[1] + Math.sin(weaponAngle) * supportOffset,
     weaponHand[2] + (ARM_DEPTH_SCALE - 1) * Math.sin(weaponAngle) * supportOffset];
   const offGuard = guardHand(-1);
-  const restOffHand: RigPoint = pose.gesture === 'bash'
+  // Lower the free palm beside the upper thigh for a loose, shallow elbow bend.
+  const restOffHand: RigPoint = restingStaffArm || (unarmed && !pose.offHand && pose.gesture !== 'bash')
+    ? relaxedHand(-1)
+    : pose.gesture === 'bash'
     ? [offGuard[0] * (1 - cast) + (Math.cos(pose.angle) * 23 - rightX * 4) * cast,
       offGuard[1] * (1 - cast) + (Math.sin(pose.angle) * 23 - rightDepth * 4) * cast, offGuard[2] + cast * 2]
     : independent ? offGuard : supportGrip;
@@ -280,8 +289,10 @@ export function playerMotion(pose: CharacterPose) {
     activeWeaponAngle = stroke.angle; activeWeaponYaw = stroke.yaw;
   }
   const weaponBehind = (staff || pose.weapon?.kind === 'wand') ? back : guardedMelee ? mainHand3[1] < -.5 : Math.sin(weaponAngle) < -0.18;
-  const weaponArm = solveArm(armShoulder(bodyAngle, 1, shoulderSway), mainPalm, bodyAngle, 1, elbowTuck, diagonal && independent && !offAttacking ? .55 * attackBlend : gripAmount);
-  const offArm = solveArm(armShoulder(bodyAngle, -1, shoulderSway), offPalm, bodyAngle, -1, offAttacking ? elbowTuck : 0, diagonal && offAttacking ? .55 * offBlend : gripAmount);
+  // Relaxed unarmed limbs use a shorter anatomical span. Held equipment keeps
+  // its existing reach; action targets still extend continuously when needed.
+  const weaponArm = solveArm(armShoulder(bodyAngle, 1, shoulderSway), mainPalm, bodyAngle, 1, elbowTuck, diagonal && independent && !offAttacking ? .55 * attackBlend : gripAmount, unarmed ? .86 : 1);
+  const offArm = solveArm(armShoulder(bodyAngle, -1, shoulderSway), offPalm, bodyAngle, -1, offAttacking ? elbowTuck : 0, restingStaffArm ? 0 : diagonal && offAttacking ? .55 * offBlend : gripAmount, unarmed && !pose.offHand ? .86 : 1);
   hand = projectArmPoint(mainHand3);
   const offWeaponActive = pose.attackHand === 'off' && pose.offHand?.kind === 'weapon';
   const offWeaponOrigin = projectArmPoint(offHand3);

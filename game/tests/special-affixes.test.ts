@@ -33,7 +33,7 @@ function make(profile = 'cinder-wand') {
 }
 function skillContext(sim: Simulation, id: SkillId): SkillContext {
   const p = sim.player; p.character.allocatedNodes.push(`skill:${id}`); p.character.skillSlots[0] = id;
-  return { player: p, enemies: sim.enemies, world, aimX: 300, aimY: 0, availableGroundEffects: 16, availableProjectiles: 128,
+  return { chains: sim.chains, player: p, enemies: sim.enemies, world, aimX: 300, aimY: 0, availableGroundEffects: 16, availableProjectiles: 128,
     damage: () => {}, visible: () => true, onScreen: () => true, projectile: () => {}, schedule: () => {}, emit: () => {} };
 }
 test('new affixes retain slot identities and skill family weights favor matching weapons/elements', () => {
@@ -50,7 +50,7 @@ test('new affixes retain slot identities and skill family weights favor matching
   near(fire.reduce((n, a) => n + a.weight!, 0), .5);
   near(fire.find(a => a.stat === 'skill:fireball')!.weight!, 3 * fire.find(a => a.stat === 'skill:iceNova')!.weight!);
   assert.ok(!fire.some(a => a.stat === 'skill:cleave'));
-  assert.deepEqual(itemAffixPool({ kind: 'shield' }).filter(a => isSkillStat(a.stat)).map(a => a.stat).sort(), ['skill:bulwark', 'skill:shieldBash']);
+  assert.deepEqual(itemAffixPool({ kind: 'shield' }).filter(a => isSkillStat(a.stat)).map(a => a.stat).sort(), ['skill:bulwark', 'skill:ironCitadel', 'skill:repulse', 'skill:shieldBash']);
   const amulet = itemAffixPool({ kind: 'amulet' });
   assert.ok([...SPECIAL_AFFIXES, ...SKILL_AFFIXES].every(a => amulet.some(b => a.stat === b.stat)));
 });

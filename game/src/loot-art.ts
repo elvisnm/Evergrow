@@ -1,4 +1,5 @@
 import { hasGreaterAffix } from './item-roll-content.ts';
+import { dropIdleHop } from './drop-idle-motion.ts';
 import { treasurePose } from './treasure-flight.ts';
 import type { GroundItem } from './character-types.ts';
 import type { Pickup } from './model.ts';
@@ -29,8 +30,12 @@ export function drawGroundLoot(c: CanvasRenderingContext2D, drops: readonly Grou
     if(drop.flight&&worldTime<drop.flight.at+drop.flight.delay)continue;
     const flight=treasurePose(drop,worldTime,reducedMotion);
     const color = TIER_COLORS[drop.item.tier];
-    const precious = ['rare', 'epic', 'legendary'].includes(drop.item.tier);
+    const precious = ['rare', 'epic', 'legendary','unique'].includes(drop.item.tier);
     c.fillStyle = '#040a10b0'; c.beginPath(); c.ellipse(flight.landed?x:flight.x, (flight.landed?y:flight.y) + 2, 12, 4, -.12, 0, Math.PI * 2); c.fill();
+    if(drop.item.tier==='unique'){
+      const glow=c.createRadialGradient(x,y,2,x,y,36);glow.addColorStop(0,'#e04b8970');glow.addColorStop(.5,'#9e60cf35');glow.addColorStop(1,'#9e60cf00');
+      c.fillStyle=glow;c.beginPath();c.ellipse(x,y,36,17,0,0,Math.PI*2);c.fill();
+    }
     // Equipment rests on the floor, not suspended inside a beam of light.
     c.save(); c.translate(flight.landed?x:flight.x, (flight.landed?y:flight.y)-3-flight.height); c.rotate(flight.spin); c.rotate(Math.sin(drop.item.seed) * .18); c.scale(1.2, .95);
     drawGearShapes(c, itemDropShapes(drop.item), value => value); c.restore();
@@ -56,11 +61,19 @@ export function drawResourcePickups(c: CanvasRenderingContext2D, pickups: readon
   c.save();
   for (const pickup of pickups) {
     c.save(); c.translate(pickup.x, pickup.y); c.globalAlpha = Math.min(1, pickup.life / 2);
+    const mana = pickup.kind === 'mana';
+    const hop = !reducedMotion ? dropIdleHop(time, pickup.id) * .8 : 0;
     c.fillStyle = '#030a10a0'; c.beginPath(); c.ellipse(0, 2, 5, 2, 0, 0, Math.PI * 2); c.fill();
+    c.translate(0, -hop);
+    const glow = c.createRadialGradient(0, -3, 1, 0, -3, 17);
+    glow.addColorStop(0, mana ? '#79c8ff70' : '#ff877970');
+    glow.addColorStop(.4, mana ? '#459eed38' : '#ed514538');
+    glow.addColorStop(1, mana ? '#459eed00' : '#ed514500');
+    c.fillStyle = glow; c.fillRect(-17, -20, 34, 34);
     c.rotate(Math.sin(pickup.id) * .35);
     polygon(c, [[-2,-8],[2,-8],[2,-5],[4,-3],[3,1],[-3,1],[-4,-3],[-2,-5]], '#1b3036');
     const surface = reducedMotion ? -3 : -3 + Math.sin(time * 2 + pickup.id) * .25;
-    polygon(c, [[-2.8,surface],[2.8,surface],[2,0],[-2,0]], pickup.kind === 'health' ? '#ca655b' : '#588db9');
+    polygon(c, [[-2.8,surface],[2.8,surface],[2,0],[-2,0]], mana ? '#75b9ec' : '#ca655b');
     c.strokeStyle = '#adc3c2'; c.lineWidth = .65; c.beginPath();
     c.moveTo(-2,-6); c.lineTo(-3,-3); c.lineTo(-2,.2); c.stroke();
     c.fillStyle = '#b8a27c'; c.fillRect(-2,-8,4,1.7);
@@ -98,6 +111,7 @@ export function drawLootLabels(c: CanvasRenderingContext2D, drops: readonly Grou
       c.beginPath(); c.moveTo(b.x, b.y - 5); c.lineTo(center, b.top + b.height / 2); c.stroke();
     }
     c.fillStyle = '#0d171ee8'; c.beginPath(); c.rect(b.left, b.top, b.width, b.height); c.fill();
+    if(drop.item.tier==='unique'){c.strokeStyle='#ba8bf190';c.lineWidth=.7;c.strokeRect(b.left+.5,b.top+.5,b.width-1,b.height-1);}
     if (drop.item.kind === 'charm') {
       // A rune-cut stone and quiet silver frame identify charms even at common rarity.
       c.strokeStyle = '#acc9d95c'; c.lineWidth = .7;

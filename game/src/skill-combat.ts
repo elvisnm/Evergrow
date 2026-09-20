@@ -1,4 +1,9 @@
-import { chainLifeOnHitMultiplier } from './skill-execution-content.ts';
+import { startChain, CHAIN_FLIGHT_LIMIT, type ChainFlight } from './chain-lightning.ts';
+import { isAura } from './aura-content.ts';
+import { hasUnique, UNIQUE_RULES } from './unique-content.ts';
+import { harvestRear, lungeReturn, returningProjectile, storeFireballs, type StoredFireball } from './unique-combat.ts';
+import { skillEffects, consumeRally, snapshotSkillOffense, queueSkillEcho } from './player-skill-effects.ts';
+import { groundEffectPulseCount } from './skill-execution-content.ts';
 import { metric } from './chronicle.ts';
 import { consumeSpellweave } from './affix-combat.ts';
 import { weaponImpactStyle } from './elemental-weapon.ts';
@@ -17,6 +22,9 @@ import { applySlow, applyStun } from './combat-status.ts';
 import { circleIntersectsSector } from './combat-geometry.ts';
 
 export interface SkillContext {
+  chains: ChainFlight[];
+  allowReturn?: boolean;
+  drawStrength?: number;
   containers?: ContainerAttackContext;
   availableGroundEffects: number;
   availableProjectiles: number;
@@ -36,36 +44,62 @@ export function activateSkill(context: SkillContext, slot: number): boolean {
   const { player: p, enemies } = context;
   if (!Number.isInteger(slot) || slot < 0 || slot >= 5 || p.dead || p.attack || p.dash || p.dodgeTime > 0 || p.castTime > 0) return false;
   const id = p.character.skillSlots[slot];
+  if(isAura(id))return false;
   if (!id || !unlockedSkills(p.character.allocatedNodes).includes(id)) return false;
   const weapon = skillWeapon(id, p.equipment);
   if (!weapon) return false;
+  const returnStep=lungeReturn(p);
+  if(id==='lunge'&&returnStep){
+    if(context.allowReturn===false||returnStep.remaining<=0)return false;
+    const to=skillTargetPoint(context.world,p,returnStep,Math.hypot(returnStep.x-p.x,returnStep.y-p.y));
+    const distance=Math.hypot(to.x-p.x,to.y-p.y);delete p.skillEffects!.returnStep;
+    if(distance<1)return true;
+    const angle=Math.atan2(to.y-p.y,to.x-p.x),duration=distance/returnStep.speed;
+    p.dash={angle,remaining:duration,speed:returnStep.speed,damage:0,radius:0,skill:id,hitIds:new Set()};
+    p.castTime=duration;p.castDuration=duration;p.castAngle=angle;p.angle=angle;p.activeSkill=id;
+    context.emit({type:'cast',x:p.x,y:p.y,angle,skill:id,style:'arcane'});return true;
+  }
   const definition = SKILL_DEFINITIONS[id];
   const costs = resolveSkill(id, p.derived, p.character);
   const recipe: SkillExecution = costs.recipe;
-  const projectileSlots = recipe.kind === 'projectile' ? recipe.offsets.length : 0;
-  const groundSlots = recipe.kind === 'ground' ? recipe.scatter ?? 1 : recipe.kind === 'radial' && recipe.echo ? 1
+  const storeEmbers=id==='fireball'&&hasUnique(p.character,'cinderheart-testament');
+  const throwShield=id==='shieldBash'&&hasUnique(p.character,'returning-verdict');
+  if(storeEmbers&&(p.skillEffects?.embers?.length??0)>=UNIQUE_RULES.storedCasts)return false;
+  const fissure=id==='earthshatter'&&hasUnique(p.character,'gravetide');
+  const shatter=id==='frostLance'&&hasUnique(p.character,'rimeheart-spire');
+  const projectileSlots = storeEmbers ? 0 : throwShield||fissure ? 1 : recipe.kind === 'projectile' ? recipe.offsets.length : recipe.kind === 'step' && recipe.shot ? 1 : 0;
+  const groundSlots = storeEmbers ? 0 : shatter ? projectileSlots : recipe.kind === 'ground' ? recipe.scatter ?? 1 : recipe.kind === 'radial' && recipe.echo ? 1
     : recipe.kind === 'projectile' && recipe.effects.groundDuration ? projectileSlots : 0;
+  if (recipe.kind === 'chain' && context.chains.length >= CHAIN_FLIGHT_LIMIT) return false;
   if (projectileSlots > context.availableProjectiles) return false;
   if (groundSlots > context.availableGroundEffects) return false;
-  if ((p.skillCooldowns[id] ?? 0) > 0 || p.mana < costs.mana) return false;
+  if ((p.skillCooldowns[id] ?? 0) > 0) return false;
+  if (p.mana < costs.mana) {
+    context.emit({ type: 'insufficient-mana', x: p.x, y: p.y, skill: id });
+    return false;
+  }
 
   const attack = deriveAttackStats(p.stats, weapon);
+  const draw = id==='piercingShot'&&hasUnique(p.character,'heartwood-draw') ? Math.max(0,Math.min(1,Number.isFinite(context.drawStrength)?context.drawStrength!:0)) : 0;
+  attack.range *= 1 + draw * (UNIQUE_RULES.drawReach-1);
   // Staff weapon derivation already applies spell bonuses; applying them here again would square scaling.
-  const weave = recipe.kind === 'guard' ? 1 : consumeSpellweave(p, definition.requirement === 'magic' ? 'spell' : weapon.attackKind === 'melee' ? 'melee' : 'other');
-  const damage = attack.damage * costs.damageMultiplier * weave;
-  const offense: HitSnapshot = { skill:id, critChance: p.derived.critChance, critMultiplier: p.derived.critMultiplier, lifeOnHit: p.derived.lifeOnHit };
+  const weave = !definition.damageMultiplier ? 1 : consumeSpellweave(p, definition.requirement === 'magic' ? 'spell' : weapon.attackKind === 'melee' ? 'melee' : 'other');
+  const rally = definition.damageMultiplier ? consumeRally(p, weapon.attackKind === 'melee') : 1;
+  const damage = attack.damage * costs.damageMultiplier * weave * rally * (1+draw*(UNIQUE_RULES.drawDamage-1));
+  const offense: HitSnapshot = snapshotSkillOffense(p,id);
   let launch: WeaponLaunch | undefined;
   const color = definition.color;
   const hitStyle = 'style' in recipe ? recipe.style : weaponImpactStyle(weapon);
   const damageTarget = (enemy: Enemy, amount: number, angle: number, melee: boolean, contactOffense = offense) => context.damage(enemy, amount, angle, melee, hitStyle, weapon.attackKind === 'melee' ? attack.elementalDamage * (damage > 0 ? amount / attack.damage : 0) : undefined, contactOffense);
   const living = () => enemies.filter(enemy => enemy.state !== 'dead');
   const visible = (enemy: Enemy) => context.visible(p.x, p.y, enemy.x, enemy.y);
+  const novaPoint=recipe.kind==='radial'&&recipe.targetRange ? skillTargetPoint(context.world,p,{x:context.aimX,y:context.aimY},recipe.targetRange):p;
   const radial = (radius: number, hit: (enemy: Enemy, angle: number) => void) => {
-    for (const enemy of living()) if (Math.hypot(enemy.x - p.x, enemy.y - p.y) <= radius + enemy.radius && visible(enemy)) {
-      hit(enemy, Math.atan2(enemy.y - p.y, enemy.x - p.x));
+    for (const enemy of living()) if (Math.hypot(enemy.x - novaPoint.x, enemy.y - novaPoint.y) <= radius + enemy.radius && context.visible(novaPoint.x,novaPoint.y,enemy.x,enemy.y)) {
+      hit(enemy, Math.atan2(enemy.y - novaPoint.y, enemy.x - novaPoint.x));
     }
   };
-  const blast = (radius: number, style?: ProjectileEffects['style']) => context.emit({ type: 'blast', x: p.x, y: p.y,
+  const blast = (radius: number, style?: ProjectileEffects['style']) => context.emit({ type: 'blast', x: novaPoint.x, y: novaPoint.y,
     skill: id, color, radius, duration: SKILL_TARGETING.blastDuration, ...(style ? { style } : {}) });
   const aimedPoint = () => skillTargetPoint(context.world,p,{x:context.aimX,y:context.aimY},attack.range);
 
@@ -77,29 +111,76 @@ export function activateSkill(context: SkillContext, slot: number): boolean {
     p.attack = { kind: 'melee', offense, skill: id, specialization: costs.variant?.id, weapon, hand: weapon === p.equipment.mainHand ? 'main' : 'off', elapsed: 0, duration,
       activeStart: duration * BASIC_ATTACK_PHASES.activeStart, activeEnd: duration * BASIC_ATTACK_PHASES.activeEnd,
       angle: p.angle, range: attack.range * recipe.reachMultiplier,
-      arc: recipe.arc, damage, elementalDamage: attack.elementalDamage * costs.damageMultiplier * weave, hitIds: new Set() };
+      arc: recipe.arc, damage, elementalDamage: attack.elementalDamage * costs.damageMultiplier * weave * rally, hitIds: new Set() };
     context.emit({ type: 'swing', x: p.x, y: p.y, angle: p.angle, skill: id, color });
     return true;
   }
 
   p.castTime = 1 / attack.attacksPerSecond; p.castAngle = p.angle;
   switch (recipe.kind) {
+    case 'aura': return false;
+    case 'step': {
+      const angle=p.angle;
+      p.dash={angle:angle+(recipe.retreat?Math.PI:0),remaining:recipe.duration,speed:recipe.speed,damage:0,radius:0,skill:id,hitIds:new Set()};
+      p.castTime=recipe.duration;
+      if(recipe.shot){
+        const shotDef:ProjectileDefinition={owner:'player',speed:560,life:Math.max(.1,attack.range/560),radius:3,damage};
+        const effects:ProjectileEffects={style:'arrow',offense,pierce:recipe.pierce};
+        const shot=context.projectile(p.x,p.y,angle,shotDef,id,effects);if(shot)launch=shot.launch;
+        queueSkillEcho(p,p.x,p.y,angle,shotDef,effects,{x:context.aimX,y:context.aimY});
+      }
+      break;
+    }
+    case 'ward': {
+      p.castTime=.18;
+      skillEffects(p).ward={remaining:recipe.duration,capacity:p.maxHp*recipe.fraction,
+        ...(hasUnique(p.character,'broken-seal')?{rupture:{absorbed:0,cap:attack.damage*UNIQUE_RULES.wardSpellCap,radius:UNIQUE_RULES.wardRadius*p.derived.areaMultiplier,offense:{...offense,critChance:0,lifeOnHit:0,directDamageMultiplier:1}}}:{})};
+      if(p.skillEffects?.borrowed)p.skillEffects.borrowed.capacity=Math.min(p.skillEffects.borrowed.capacity,Math.max(0,p.maxHp*UNIQUE_RULES.borrowedLife-p.skillEffects.ward!.capacity));
+      break;
+    }
+    case 'stance': {
+      p.castTime=.18;
+      const key=id==='ghostHunt'?'ghostHunt':id==='rallyOfIron'?'rallyOfIron':'brace';
+      skillEffects(p)[key]={remaining:recipe.duration,reduction:recipe.reduction,charges:recipe.charges,bonus:recipe.bonus};
+      if(id==='ghostHunt'&&hasUnique(p.character,'pale-huntsman')){skillEffects(p).archer={x:p.x,y:p.y,angle:p.angle,remaining:recipe.duration};skillEffects(p).echoes=[];}
+      break;
+    }
     case 'dash':
-      p.dash = { angle: p.angle, remaining: recipe.duration, speed: recipe.speed, damage, offense, elementalDamage: attack.elementalDamage * costs.damageMultiplier * weave, radius: recipe.radius, skill: id, style: hitStyle, hitIds: new Set() };
+      if(id==='lunge'&&hasUnique(p.character,'duelists-return'))skillEffects(p).returnStep={x:p.x,y:p.y,remaining:UNIQUE_RULES.returnWindow,speed:recipe.speed};
+      p.dash = { angle: p.angle, remaining: recipe.duration, speed: recipe.speed, damage, offense, elementalDamage: attack.elementalDamage * costs.damageMultiplier * weave * rally, radius: recipe.radius, skill: id, style: hitStyle, hitIds: new Set() };
+      if(p.skillEffects?.returnStep)p.skillEffects.returnStep.outward=p.dash;
       p.castTime = Math.max(p.castTime, recipe.duration);
       break;
     case 'radial':
-      strikeContainers(context.containers, p.x, p.y, recipe.radius);
+      if(id==='smokeVeil'&&hasUnique(p.character,'ashen-double')){
+        const state=skillEffects(p),serial=state.uniqueSerial=(state.uniqueSerial??0)+1;
+        state.decoy={id:serial,x:p.x,y:p.y,radius:p.radius,reach:recipe.radius,angle:p.angle,remaining:UNIQUE_RULES.decoyDuration,hp:p.maxHp*UNIQUE_RULES.decoyLife,maxHp:p.maxHp*UNIQUE_RULES.decoyLife};
+      }
+      if(fissure){
+        context.projectile(p.x,p.y,p.angle,{owner:'player',speed:UNIQUE_RULES.fissureSpeed,life:UNIQUE_RULES.fissureRange/UNIQUE_RULES.fissureSpeed,radius:4,damage},id,
+          {style:hitStyle??'arrow',fissureWidth:recipe.radius*.4,offense,pierce:Number.MAX_SAFE_INTEGER,stunDuration:recipe.stun,elementalDamage:attack.elementalDamage*costs.damageMultiplier*weave*rally});
+        break;
+      }
+      if(recipe.shelter)(skillEffects(p).shelters??={})[id]={remaining:recipe.shelter.duration,reduction:recipe.shelter.reduction};
+      if(!damage)p.castTime=.18;
+      if(damage)strikeContainers(context.containers, novaPoint.x, novaPoint.y, recipe.radius);
       radial(recipe.radius, (enemy, angle) => {
-        damageTarget(enemy, damage, angle, recipe.melee);
+        if(damage)damageTarget(enemy, damage, angle, recipe.melee);
         if (recipe.stun) applyStun(enemy, recipe.stun, recipe.style === 'frost' ? 'freeze' : 'stun');
         if (recipe.slow) applySlow(enemy, recipe.slow);
       });
-      if (recipe.echo) context.schedule({ kind: 'frost', x: p.x, y: p.y, radius: recipe.radius * 1.2, delay: .6, duration: 0, interval: 1,
+      if (recipe.echo) context.schedule({ kind: 'frost', x: novaPoint.x, y: novaPoint.y, radius: recipe.radius * 1.2, delay: .6, duration: 0, interval: 1,
         damage: damage * .6, offense, skill: id, style: 'frost', slow: recipe.slow });
       blast(recipe.radius, recipe.style);
       break;
     case 'cone':
+      if(throwShield){
+        const range=UNIQUE_RULES.shieldRange*recipe.radius/68;
+        const shot=context.projectile(p.x,p.y,p.angle,{owner:'player',speed:UNIQUE_RULES.shieldSpeed,life:range/UNIQUE_RULES.shieldSpeed,radius:Math.min(24,10*recipe.arc/(Math.PI*.7)),damage},id,
+          {style:hitStyle??'arrow',offense,pierce:1000000,stunDuration:recipe.stun,elementalDamage:attack.elementalDamage*costs.damageMultiplier*weave*rally,thrownShield:p.character.equipped.offhand!.shield!.visual});
+        if(shot)returningProjectile(shot,p.x,p.y);
+        break;
+      }
       context.emit({ type: 'skill-strike', x: p.x, y: p.y, skill: id, color, angle: p.angle, range: recipe.radius, arc: recipe.arc, rear: false });
       strikeContainers(context.containers, p.x, p.y, recipe.radius, p.angle, recipe.arc);
       for (const enemy of living()) if (circleIntersectsSector(enemy.x, enemy.y, enemy.radius, p.x, p.y, p.angle, recipe.radius, recipe.arc) && visible(enemy)) {
@@ -108,13 +189,15 @@ export function activateSkill(context: SkillContext, slot: number): boolean {
       break;
     case 'guard': p.guardTime = Math.max(p.guardTime, recipe.duration); p.guardReduction = recipe.reduction; break;
     case 'backstab': {
-      const target = living().filter(enemy => circleIntersectsSector(enemy.x, enemy.y, enemy.radius, p.x, p.y, p.angle, Math.max(recipe.minRange, attack.range * recipe.reachMultiplier), recipe.arc) && visible(enemy))
-        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
-      if (target) {
-        const behind = angularDistance(Math.atan2(p.y - target.y, p.x - target.x), target.angle) > recipe.rearAngle;
-        damageTarget(target, damage * (behind ? recipe.rearMultiplier : 1), p.angle, true);
-        context.emit({ type: 'skill-strike', x: p.x, y: p.y, skill: id, color, angle: p.angle, range: Math.hypot(target.x - p.x, target.y - p.y), arc: recipe.arc, rear: behind });
-      } else {
+      const targets = living().filter(enemy => circleIntersectsSector(enemy.x, enemy.y, enemy.radius, p.x, p.y, p.angle, Math.max(recipe.minRange, attack.range * recipe.reachMultiplier), recipe.arc) && visible(enemy))
+        .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y)).slice(0,recipe.targets??1);
+      for (const target of targets) {
+        const behind = harvestRear(p,target.id,angularDistance(Math.atan2(p.y - target.y, p.x - target.x), target.angle) > recipe.rearAngle);
+        const contactAngle=Math.atan2(target.y-p.y,target.x-p.x);
+        damageTarget(target, damage * (behind ? recipe.rearMultiplier : 1), contactAngle, true);
+        context.emit({ type: 'skill-strike', x: p.x, y: p.y, skill: id, color, angle: contactAngle, range: Math.hypot(target.x - p.x, target.y - p.y), arc: recipe.arc, rear: behind });
+      }
+      if (!targets.length) {
         const range = Math.max(recipe.minRange, attack.range * recipe.reachMultiplier);
         strikeContainers(context.containers, p.x, p.y, range, p.angle, recipe.arc);
         context.emit({ type: 'skill-strike', x: p.x, y: p.y, skill: id, color, angle: p.angle, range, arc: recipe.arc, rear: false });
@@ -124,13 +207,21 @@ export function activateSkill(context: SkillContext, slot: number): boolean {
     case 'projectile': {
       const { burnDamageMultiplier, groundDamageMultiplier, ...payload } = recipe.effects;
       const effects: ProjectileEffects = { ...payload, offense,
+        ...(id==='ricochet'&&hasUnique(p.character,'thread-of-pursuit')?{pursuit:true}:{}),
+        ...(shatter?{shatter:{radius:UNIQUE_RULES.shatterRadius*p.derived.areaMultiplier,delay:UNIQUE_RULES.shatterDelay}}:{}),
+        ...(id==='siphon'&&hasUnique(p.character,'borrowed-life')?{borrowedLife:true}:{}),
         ...(groundDamageMultiplier !== undefined ? { groundDps: damage * groundDamageMultiplier } : {}),
         ...(burnDamageMultiplier !== undefined ? { burnDps: damage * burnDamageMultiplier } : {}) };
-      for (const offset of recipe.offsets) {
+      if(storeEmbers){
+        storeFireballs(p,recipe.offsets.map(offset=>({sourceLevel:p.level,offset,definition:{owner:'player',speed:recipe.speed,life:Math.max(SKILL_TARGETING.minimumProjectileLife,attack.range/recipe.speed),radius:recipe.radius,damage},effects:{...effects,offense:{...offense}}} satisfies StoredFireball)));
+        break;
+      }
+      for (const [index,offset] of recipe.offsets.entries()) {
         const shot = context.projectile(p.x, p.y, p.angle + offset,
         { owner: 'player', speed: recipe.speed, life: Math.max(SKILL_TARGETING.minimumProjectileLife, attack.range / recipe.speed),
           radius: recipe.radius, damage }, id, effects);
-        if (shot) launch ??= shot.launch;
+        if (shot) {launch ??= shot.launch;if(id==='volley'&&hasUnique(p.character,'homeward-thorn'))returningProjectile(shot,p.x,p.y);}
+        if(index===0)queueSkillEcho(p,p.x,p.y,p.angle+offset,{owner:'player',speed:recipe.speed,life:Math.max(SKILL_TARGETING.minimumProjectileLife,attack.range/recipe.speed),radius:recipe.radius,damage},effects,{x:context.aimX,y:context.aimY});
       }
       break;
     }
@@ -144,37 +235,31 @@ export function activateSkill(context: SkillContext, slot: number): boolean {
         context.schedule({ kind: recipe.effect, ...target, radius: recipe.radius, delay: recipe.delay + i * .18,
           duration: recipe.duration, interval: recipe.interval, damage, offense, skill: id, style: recipe.style,
           follow: recipe.follow, upkeep: costs.upkeep, slow: recipe.slow, stun: recipe.stun,
+          ...(id==='rainOfArrows'&&hasUnique(p.character,'briarfall-mantle')?{travel:{vx:Math.cos(p.angle)*UNIQUE_RULES.rainTravel/Math.max(recipe.interval,(groundEffectPulseCount(recipe)-1)*recipe.interval),vy:Math.sin(p.angle)*UNIQUE_RULES.rainTravel/Math.max(recipe.interval,(groundEffectPulseCount(recipe)-1)*recipe.interval),remaining:UNIQUE_RULES.rainTravel}}:{}),
           ...(recipe.scorch ? { scorch: { duration: recipe.scorch.duration, interval: recipe.scorch.interval, dps: damage * recipe.scorch.damageMultiplier } } : {}),
           ...(recipe.burn ? { burn: { duration: recipe.burn.duration, dps: damage * recipe.burn.damageMultiplier } } : {}) });
       }
       break;
     }
     case 'chain': {
-      const point = aimedPoint(), hit = new Set<number>();
-      let from = { x: p.x, y: p.y }, amount = damage;
-      let next = living().filter(enemy => context.onScreen(enemy) && Math.hypot(enemy.x - p.x, enemy.y - p.y) <= attack.range + enemy.radius && visible(enemy))
+      const point = aimedPoint();
+      const conductor=hasUnique(p.character,'stormglass-reliquary');
+      if(conductor)skillEffects(p).conductor={...point,remaining:UNIQUE_RULES.conductorWindow};
+      const from = conductor?{...point}:{ x: p.x, y: p.y };
+      const next = living().filter(enemy => context.onScreen(enemy) && (conductor?Math.hypot(enemy.x-from.x,enemy.y-from.y)<=recipe.range+enemy.radius&&context.visible(from.x,from.y,enemy.x,enemy.y):Math.hypot(enemy.x-p.x,enemy.y-p.y)<=attack.range+enemy.radius&&visible(enemy)))
         .sort((a, b) => Math.hypot(a.x - point.x, a.y - point.y) - Math.hypot(b.x - point.x, b.y - point.y))[0];
       // In a quiet area, an aimed bolt can discharge into a nearby container.
       // Enemy chains retain their own target budget and never jump through scenery.
       if (!next && context.containers) {
         const target = [...context.world.getContainers?.(p.x, p.y, attack.range) ?? []]
-          .filter(t => Math.hypot(t.x - point.x, t.y - point.y) <= t.radius + 40 && containerVisible(context.world, p.x, p.y, t))
+          .filter(t => Math.hypot(t.x - point.x, t.y - point.y) <= t.radius + 40 && containerVisible(context.world, from.x, from.y, t))
           .sort((a, b) => Math.hypot(a.x - point.x, a.y - point.y) - Math.hypot(b.x - point.x, b.y - point.y))[0];
         if (target) {
-          context.emit({ type: 'chain', x: p.x, y: p.y, toX: target.x, toY: target.y, skill: id, color, style: recipe.style, duration: recipe.duration });
+          context.emit({ type: 'chain', x: from.x, y: from.y, toX: target.x, toY: target.y, skill: id, color, style: recipe.style, duration: recipe.duration });
           context.containers.break(target, Math.atan2(target.y - p.y, target.x - p.x));
         }
       }
-      for (let jump = 0; next && jump < recipe.jumps; jump++) {
-        const target = next;
-        context.emit({ type: 'chain', x: from.x, y: from.y, toX: target.x, toY: target.y, skill: id, color, style: recipe.style, duration: recipe.duration });
-        damageTarget(target, amount, Math.atan2(target.y - from.y, target.x - from.x), false,
-          { ...offense, lifeOnHit: offense.lifeOnHit * chainLifeOnHitMultiplier(jump, hit.has(target.id)) });
-        hit.add(target.id); from = { x: target.x, y: target.y }; amount *= recipe.falloff;
-        next = living().filter(enemy => context.onScreen(enemy) && enemy.id !== target.id && (recipe.revisit || !hit.has(enemy.id)) && Math.hypot(enemy.x - from.x, enemy.y - from.y) <= recipe.range + enemy.radius
-          && context.visible(from.x, from.y, enemy.x, enemy.y))
-          .sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
-      }
+      if (next) startChain(context.chains, from, next, damage, offense, recipe, id, color, context);
       break;
     }
     default: {

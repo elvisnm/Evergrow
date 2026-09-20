@@ -1,3 +1,4 @@
+import { withUniqueChance } from './unique-content.ts';
 import { CHARM_DROP_WEIGHT } from './charm-content.ts';
 import type { BiomeId } from './biomes.ts';
 import type { ItemKind, ItemTier } from './character-types.ts';
@@ -16,11 +17,11 @@ export interface EnemyLootTable {
 /** Initial authored rewards. Encounter rank changes yield and rarity, never the player's current level. */
 export const ENEMY_LOOT_TABLES: Readonly<Record<EnemyRank, EnemyLootTable>> = Object.freeze({
   normal: Object.freeze({ guaranteedItems: 0, bonusItemChance: .28, itemLevelBonus: 0,
-    tierWeights: Object.freeze({ common: 74.97, magic: 22, rare: 2.7, epic: .28, legendary: .05 }) }),
+    tierWeights: Object.freeze(withUniqueChance({ common: 74.97, magic: 22, rare: 2.7, epic: .28, legendary: .05 })) }),
   veteran: Object.freeze({ guaranteedItems: 0, bonusItemChance: .7, itemLevelBonus: 1,
-    tierWeights: Object.freeze({ common: 59.9, magic: 32, rare: 7, epic: .95, legendary: .15 }) }),
+    tierWeights: Object.freeze(withUniqueChance({ common: 59.9, magic: 32, rare: 7, epic: .95, legendary: .15 })) }),
   elite: Object.freeze({ guaranteedItems: 1, bonusItemChance: .25, itemLevelBonus: 2,
-    tierWeights: Object.freeze({ common: 39.6, magic: 45, rare: 13, epic: 1.9, legendary: .5 }) }),
+    tierWeights: Object.freeze(withUniqueChance({ common: 39.6, magic: 45, rare: 13, epic: 1.9, legendary: .5 })) }),
 });
 
 type TierWeights = Readonly<Record<ItemTier, number>>;
@@ -29,7 +30,7 @@ type TierWeights = Readonly<Record<ItemTier, number>>;
 function bossChestTable(chance: number, second: TierWeights, third: TierWeights): readonly TierWeights[] {
   const legendary = 100 * (1 - (1 - chance) / ((1 - second.legendary / 100) * (1 - third.legendary / 100)));
   return Object.freeze([
-    Object.freeze({ common: 0, magic: 0, rare: 100 - 5.7 - legendary, epic: 5.7, legendary }),
+    Object.freeze(withUniqueChance({ common: 0, magic: 0, rare: 100 - 5.7 - legendary, epic: 5.7, legendary })),
     second, third,
   ]);
 }
@@ -44,7 +45,7 @@ export function getLootTable(rank: EnemyRank): EnemyLootTable { return ENEMY_LOO
 export const NORMAL_COMMON_EQUIPMENT_SKIP_CHANCE = 1 / 3;
 
 /** All twelve equipment kinds remain eligible. The foe's archetype supplies a readable tendency. */
-export const ENEMY_ITEM_KIND_WEIGHTS: Readonly<Record<EnemyKind, Readonly<Record<ItemKind, number>>>> = Object.freeze({
+export const ENEMY_ITEM_KIND_WEIGHTS: Readonly<Record<EnemyKind, Readonly<Record<Exclude<ItemKind, 'riftKey'>, number>>>> = Object.freeze({
   thornReaver: Object.freeze({ charm: CHARM_DROP_WEIGHT, grimoire: 2, orb: 2, weapon: 14, shield: 5, head: 5, chest: 7, gloves: 13, legs: 10, boots: 22, cloak: 10, amulet: 5, ring: 5 }),
   mireSpitter: Object.freeze({ charm: CHARM_DROP_WEIGHT, grimoire: 10, orb: 10, weapon: 28, shield: 3, head: 6, chest: 6, gloves: 5, legs: 5, boots: 5, cloak: 14, amulet: 4, ring: 4 }),
   frostRevenant: Object.freeze({ charm: CHARM_DROP_WEIGHT, grimoire: 2, orb: 2, weapon: 23, shield: 18, head: 10, chest: 15, gloves: 7, legs: 10, boots: 5, cloak: 3, amulet: 2, ring: 3 }),

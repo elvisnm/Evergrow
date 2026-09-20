@@ -1,3 +1,4 @@
+import { isAura } from '../src/aura-content.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -44,9 +45,9 @@ test('forge produces deterministic, internally derived items for every kind and 
 });
 test('all active skills and specialization recipes activate in the isolated study',()=>{
   for(const skill of Object.values(SKILL_DEFINITIONS))for(const specialization of ['',...SKILL_SPECIALIZATIONS.filter(s=>s.skill===skill.id).map(s=>s.id)]){
-    const study=new SkillStudy(emptyWorld,{skill:skill.id,rank:specialization?7:1,specialization,weapon:studyWeapons(skill.id)[0].id,facing:0,targets:'fan',enemy:'brute',x:0,y:0});
+    const study=new SkillStudy(emptyWorld,{skill:skill.id,rank:specialization?3:1,specialization,weapon:studyWeapons(skill.id)[0].id,facing:0,targets:'fan',enemy:'brute',x:0,y:0});
     const seen=new Set<string>();for(let i=0;i<240;i++)for(const event of study.step())seen.add(event.type);
-    assert.equal(study.didCast,true,`${skill.id}/${specialization}`);assert.ok(seen.has('cast')||seen.has('swing'));
+    if(isAura(skill.id)){assert.ok(study.simulation.player.auras?.powers[skill.id]);assert.equal(study.casts,0);}else {assert.equal(study.didCast,true,`${skill.id}/${specialization}`);assert.ok(seen.has('cast')||seen.has('swing'));}
     assert.equal(study.simulation.kills,0);assert.equal(study.simulation.groundItems.length,0);assert.equal(study.simulation.enemies.length,7);
     assert.equal(study.simulation.player.character.skillSlots[0],skill.id);
   }
@@ -65,4 +66,16 @@ test('world survey returns deterministic bounded geography without player explor
   try{const first=surveyPlaces(world,query);assert.deepEqual(first,surveyPlaces(world,query));for(const p of first){assert.ok(Math.abs(p.x)<=1500&&Math.abs(p.y)<=1500);assert.ok(p.zone.level>=1);}
     assert.throws(()=>surveyPlaces(world,{...query,size:1000000}));
   }finally{world.dispose();}
+});
+
+test('new Unique studies stage a held draw, marked follow-up and blocked counterattack through runtime input',()=>{
+ for(const [unique,skill,scenario] of [['heartwood-draw','piercingShot','showcase'],['red-harvest','backstab','showcase'],['patient-bastion','bulwark','defense']] as const){
+  const study=new SkillStudy(emptyWorld,{unique,skill,scenario,level:25,rank:1,specialization:'',weapon:studyWeapons(skill)[0].id,facing:0,targets:'single',rear:true,enemy:'brute',x:0,y:0});
+  let charge=false,mark=false,stored=false;
+  for(let i=0;i<400;i++){study.step();const effects=study.simulation.player.skillEffects;charge||=!!effects?.draw;mark||=!!effects?.harvest?.length;stored||=!!effects?.bastion;}
+  assert.ok(study.casts>0,unique);
+  if(unique==='heartwood-draw'){assert.ok(charge);assert.equal(study.casts,1);assert.ok(study.damage>0);}
+  if(unique==='red-harvest'){assert.ok(mark);assert.equal(study.casts,2);assert.equal(study.simulation.player.skillEffects?.harvest?.length,0);}
+  if(unique==='patient-bastion'){assert.ok(stored);assert.ok(study.damage>0);}
+ }
 });

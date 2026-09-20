@@ -4,6 +4,7 @@ import { createCharacterSheet, deriveItem, generateItem, rebalanceItemOffense } 
 import { deriveCharacterStats } from '../src/character-stats.ts';
 import { validItem } from '../src/item-validation.ts';
 import { addInventoryItem } from '../src/inventory.ts';
+import { PACK_CELLS } from '../src/inventory-grid.ts';
 
 function rolledHead(level:number, stat:'intelligence'|'strength'|'spellDamagePercent'|'vitality') {
   const item=generateItem(555,level,'head',undefined,'epic',stat==='strength'||stat==='vitality'?'iron':'cloth');
@@ -17,7 +18,7 @@ test('allocated, equipment, charm and tree attributes share the reduced conversi
   const ring=generateItem(8,35,'ring','moonstone-ring','rare');
   ring.implicit={};ring.affixes=[{name:'Might',stat:'strength',value:10},{name:'Insight',stat:'intelligence',value:10}];sheet.equipped.ring1=ring;
   const charm=generateItem(9,35,'charm','storm-pebble','rare');charm.affixes=[{name:'Insight',stat:'intelligence',value:4}];
-  assert.ok(addInventoryItem(sheet,charm));
+  assert.ok(addInventoryItem(sheet,charm));sheet.inventoryLayout![charm.id]=PACK_CELLS;
   const stats=deriveCharacterStats(sheet,{strength:5,intelligence:5,damagePercent:20,spellDamagePercent:30},35);
   assert.equal(stats.attackDamageMultiplier,1.725);
   assert.equal(stats.spellDamageMultiplier,1.885);

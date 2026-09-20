@@ -1,8 +1,13 @@
+import { riftModifiers } from './rift-content.ts';
+import { effectTerm, statTerm } from './effect-terms.ts';
+import { uniquePowerMarkup } from './unique-power-ui.ts';
+import { uniqueDefinition } from './unique-content.ts';
 import { hasGreaterAffix, isGreaterAffix, GREATER_AFFIX_SYMBOL } from './item-roll-content.ts';
 import { MANA_RULES } from './mana-content.ts';
 import { ITEM_LOCK_ICON } from './item-protection.ts';
+import { itemPrice } from './commerce.ts';
 import { RESISTANCE_LABELS } from './resistance-content.ts';
-import { SPECIAL_AFFIX_LABELS, SKILL_STATS, isSkillStat, type SkillStat } from './equipment-affix-content.ts';
+import { AFFIX_COMBAT_RULES, SPECIAL_AFFIX_LABELS, SKILL_STATS, isSkillStat, type SkillStat } from './equipment-affix-content.ts';
 import { ELEMENTAL_AFFIXES, ELEMENT_COLORS } from './elemental-weapon.ts';
 import { weaponActionRate, basicAttackManaCost } from './equipment.ts';
 import type { CharacterSheet, EquipmentSlot, Item, ItemTier, StatKey } from './character-types.ts';
@@ -12,7 +17,8 @@ import { previewEquipmentChange, type EquipmentStatChange, type PreviewStat } fr
 import { escapeUI } from './ui-components.ts';
 
 const greaterMark = '<span class="ui-greater-affix" role="img" aria-label="Greater affix · top 10% roll" title="Greater affix · top 10% roll"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0 10 6 16 8 10 10 8 16 6 10 0 8 6 6Z"/></svg></span>';
-const TIER_RANK: Record<ItemTier, number> = { common: 1, magic: 2, rare: 3, epic: 4, legendary: 5 };
+const TIER_RANK: Record<Exclude<ItemTier, 'unique'>, number> = { common: 1, magic: 2, rare: 3, epic: 4, legendary: 5 };
+const uniqueSeal = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 10 6 15 8 10 10 8 15 6 10 1 8 6 6Z"/></svg>';
 const number = (n: number, decimals = 1) => n.toLocaleString('en-US', { maximumFractionDigits: decimals });
 export interface ItemPresentation {
   sheet: CharacterSheet; level: number; equipped?: boolean; sourceIndex?: number; targetSlot?: EquipmentSlot;
@@ -20,8 +26,17 @@ export interface ItemPresentation {
   context?: string;
   /** Hover comparisons name displaced gear in adjacent cards instead. */
   adjacentComparison?: boolean;
-  /** Compact world inspection shows the item's own stats without an equip simulation. */
+  /** Ground inspection retains compact property rows with inline net changes. */
+  compactComparison?: boolean;
+  equippedLabel?: string;
+  /** Optional item-only inspection without an equip simulation. */
   compare?: boolean;
+  /** Ground loot keeps the enhancement rank in the name without its explanatory banner. */
+  hideEnhancementDetails?: boolean;
+  /** Index for cycling comparison views when multiple slots are displaced (0 = consolidated/all, 1 = first slot, 2 = second slot). */
+  focusIndex?: number;
+  /** Optional Alt toggle button configuration rendered within the item comparison section. */
+  altToggle?: { label: string; focusIndex: number };
 }
 export const CHANGE_LABELS: Record<PreviewStat, string> = {
   ...SPECIAL_AFFIX_LABELS, ...SKILL_STATS,
@@ -59,11 +74,22 @@ function equipChangeCell(change: EquipmentStatChange | undefined, emptyLabel = '
   const percentage = PREVIEW_PERCENT.has(change.key);
   const delta = (change.after - change.before) * (percentage ? 100 : 1) * scale;
   const wholePercent = ['areaPercent', 'potionPercent', 'spellweavePercent', 'afterguardPercent'].includes(change.key);
-  return `<td class="${delta > 0 ? 'is-gain' : 'is-loss'}">${delta > 0 ? '+' : ''}${number(delta, 2)}${percentage || wholePercent ? '%' : ''}</td>`;
+  return `<td class="${delta > 0 ? 'is-gain' : 'is-loss'}"><span aria-hidden="true">${delta > 0 ? '↑' : '↓'}</span> ${delta > 0 ? '+' : ''}${number(delta, 2)}${percentage || wholePercent ? '%' : ''}</td>`;
+}
+
+function inlineEquipChange(change: EquipmentStatChange | undefined, scale = 1): string {
+  if (!change) return '';
+  const percentage = PREVIEW_PERCENT.has(change.key);
+  const delta = (change.after - change.before) * (percentage ? 100 : 1) * scale;
+  const unit = percentage || ['areaPercent', 'potionPercent', 'spellweavePercent', 'afterguardPercent'].includes(change.key) ? '%' : '';
+  return ` <span class="ui-item-inline-change ${delta > 0 ? 'is-gain' : 'is-loss'}" aria-label="On equip: ${delta > 0 ? '+' : ''}${number(delta, 2)}${unit}">(${delta > 0 ? '+' : ''}${number(delta, 2)}${unit})</span>`;
 }
 
 export function itemSlotMarkup(item: Item, size = 44): string {
-  return `${itemIconSVG(item, size)}${hasGreaterAffix(item) ? `<span class="ui-item-greater">${greaterMark}</span>` : ''}${item.locked?`<span class="ui-item-lock" aria-label="Locked">${ITEM_LOCK_ICON}</span>`:''}${item.recipe.enhancement ? `<span class="ui-item-enhancement">+${item.recipe.enhancement}</span>` : ''}<span class="ui-item-level">${number(item.itemLevel, 0)}</span><span class="ui-item-tier" aria-hidden="true">${'<i></i>'.repeat(TIER_RANK[item.tier])}</span>`;
+  const tierMark = item.tier === 'unique'
+    ? `<span class="ui-item-unique-seal" aria-hidden="true">${uniqueSeal}</span>`
+    : `<span class="ui-item-tier" aria-hidden="true">${'<i></i>'.repeat(TIER_RANK[item.tier])}</span>`;
+  return `${itemIconSVG(item, size)}${hasGreaterAffix(item) ? `<span class="ui-item-greater">${greaterMark}</span>` : ''}${item.locked?`<span class="ui-item-lock" aria-label="Locked">${ITEM_LOCK_ICON}</span>`:''}${item.recipe.enhancement ? `<span class="ui-item-enhancement">+${item.recipe.enhancement}</span>` : ''}<span class="ui-item-level">${number(item.itemLevel, 0)}</span>${tierMark}`;
 }
 export function updateItemSlot(cell: HTMLButtonElement, item: Item | null, options: { level: number; emptyMarkup: string; label: string; draggable?: boolean }): void {
   cell.classList.add('ui-item-slot');
@@ -81,6 +107,7 @@ export function updateItemSlot(cell: HTMLButtonElement, item: Item | null, optio
 
 /** Item data and effective equipment changes are distinct; no inventory DOM location is required. */
 export function itemTooltipMarkup(item: Item, view: ItemPresentation): string {
+  if(item.kind==='riftKey')return `<div class="ui-item-heading"><div><span class="ui-item-class"><span class="ui-rarity-badge" data-tier="${item.tier}">${escapeUI(TIER_NAMES[item.tier])}</span></span><h4>${escapeUI(item.name)}</h4></div></div><p>Single use · Opens an empowered rift</p>${riftModifiers({attempt:1,keySeed:item.seed,keyTier:item.recipe.riftKeyTier}).map(m=>`<div class="ui-item-property ui-rift-modifier" style="color:${m.beneficial?'#a2d5b3':'#ed929f'}"><span>${escapeUI(m.label)}</span><strong>+${m.value}${m.unit}</strong></div>`).join('')}`;
   const preview = view.compare === false || view.equipped || item.kind === 'charm' && view.sourceIndex !== undefined ? null : previewEquipmentChange(view.sheet, item, view.level,
     { sourceIndex: view.sourceIndex, slot: view.targetSlot });
   const changes = new Map(preview?.ok ? preview.changes.map(change => [change.key, change]) : []);
@@ -88,16 +115,22 @@ export function itemTooltipMarkup(item: Item, view: ItemPresentation): string {
     const key = stat as StatKey;
     const element = ELEMENTAL_AFFIXES.find(a => a.stat === key)?.element;
     const greater = item.affixes.some((a, i) => a.stat === key && isGreaterAffix(item, i));
-    const label = `${greater ? greaterMark : ''}${escapeUI(STAT_LABELS[key])}${element ? ` · ${{ fire: 'Burn', frost: 'Chill', lightning: 'Interrupt' }[element]}` : ''}`;
+    const label = `${greater ? greaterMark : ''}${statTerm(key, element ? `This weapon · ${element} damage` : STAT_LABELS[key]) || escapeUI(STAT_LABELS[key])}${element ? ` · ${effectTerm({fire:'burn',frost:'slow',lightning:'stagger'}[element], {fire:'Burn',frost:'Slow',lightning:'Interrupt'}[element])}` : ''}`;
     const color = element ? ` style="color:${ELEMENT_COLORS[element]}"` : '';
     if (!preview?.ok) return `<div class="ui-item-property"${color}><span>${label}</span><strong>${formatStatValue(key, value)}</strong></div>`;
     const previewKey = isSkillStat(key) ? key : MODIFIER_PREVIEW[key];
     const change = previewKey ? changes.get(previewKey) : undefined;
     if (previewKey) changes.delete(previewKey);
+    if (view.compactComparison) return `<div class="ui-item-property"${color}><span>${label}</span><strong>${formatStatValue(key, value)}${inlineEquipChange(change, key === 'manaRegen' ? MANA_RULES.regenerationPeriod : 1)}</strong></div>`;
     return `<tr><th scope="row"${color}>${label}</th><td${color}>${formatStatValue(key, value)}</td>${equipChangeCell(change, previewKey ? 'No change' : 'Included in derived changes', key === 'manaRegen' ? MANA_RULES.regenerationPeriod : 1)}</tr>`;
   });
-  for (const change of changes.values()) rows.push(`<tr><th scope="row">${escapeUI(CHANGE_LABELS[change.key])}</th><td class="ui-item-stat-empty" aria-label="Not an item bonus">—</td>${equipChangeCell(change)}</tr>`);
-  const properties = preview?.ok
+  for (const change of changes.values()) {
+    const label = statTerm(change.key, CHANGE_LABELS[change.key]) || escapeUI(CHANGE_LABELS[change.key]);
+    rows.push(view.compactComparison
+      ? `<div class="ui-item-property"><span>${label}</span><strong>${inlineEquipChange(change)}</strong></div>`
+      : `<tr><th scope="row">${label}</th><td class="ui-item-stat-empty" aria-label="Not an item bonus">—</td>${equipChangeCell(change)}</tr>`);
+  }
+  const properties = preview?.ok && !view.compactComparison
     ? `<table class="ui-item-stat-table" aria-label="Item bonuses and net changes on equip"><thead><tr><th scope="col">Stat</th><th scope="col">Item</th><th scope="col">On equip</th></tr></thead><tbody>${rows.join('')}</tbody></table>${!preview.changes.length ? '<p class="ui-item-description">No stat change</p>' : ''}`
     : `<div class="ui-item-properties">${rows.join('')}</div>`;
   let weapon = '';
@@ -113,12 +146,17 @@ export function itemTooltipMarkup(item: Item, view: ItemPresentation): string {
     else if (preview.displaced.length && !view.adjacentComparison)
       comparison = `<div class="ui-item-comparison"><p>Replaces ${preview.displaced.map(entry => escapeUI(entry.item.name)).join(' + ')}</p></div>`;
   }
-  return `<div class="ui-item-heading"><div><span class="ui-item-class"><span class="ui-rarity-badge" data-tier="${item.tier}">${escapeUI(TIER_NAMES[item.tier])}</span><span>${escapeUI(item.baseName)}</span></span><h4>${hasGreaterAffix(item) ? escapeUI(itemDisplayName(item).slice(0, -(GREATER_AFFIX_SYMBOL.length + 1))) + ' ' + greaterMark : escapeUI(itemDisplayName(item))}</h4></div></div>
+  if (view.altToggle) {
+    comparison += `<div class="ui-item-comparison"><button type="button" class="ui-item-alt-toggle" title="Press Alt or click to cycle comparison"><kbd>Alt</kbd> <span>${escapeUI(view.altToggle.label)}</span></button></div>`;
+  }
+  return `<div class="ui-item-heading"><div><span class="ui-item-class"><span class="ui-rarity-badge" data-tier="${item.tier}">${escapeUI(TIER_NAMES[item.tier])}</span><span>${escapeUI(item.baseName)}</span>${view.equipped && view.compactComparison ? `<span class="ui-item-equipped-inline" title="${escapeUI(view.equippedLabel ?? '')}">Equipped</span>` : ''}</span><h4>${hasGreaterAffix(item) ? escapeUI(itemDisplayName(item).slice(0, -(GREATER_AFFIX_SYMBOL.length + 1))) + ' ' + greaterMark : escapeUI(itemDisplayName(item))}</h4></div></div>
     <div class="ui-item-meta"><span>Item level ${number(item.itemLevel, 0)}</span><span class="${item.requiredLevel > view.level ? 'is-loss' : ''}">Requires level ${number(item.requiredLevel, 0)}</span>${view.equipped ? '<span class="ui-item-equipped">Equipped</span>' : ''}${item.locked?'<span class="ui-item-equipped">Locked</span>':''}</div>
-    ${item.recipe.enhancement ? `<div class="ui-item-upgrade">Enhancement +${item.recipe.enhancement} / 10 · +${item.recipe.enhancement * 5}% scalable item stats</div>` : ''}
+    ${item.recipe.enhancement && !view.hideEnhancementDetails ? `<div class="ui-item-upgrade">Enhancement +${item.recipe.enhancement} / 10 · +${item.recipe.enhancement * 5}% scalable item stats</div>` : ''}
     ${weapon}${properties}
-    ${item.affixes.length ? `<div class="ui-item-affixes">${item.affixes.map(a => escapeUI(a.name)).join(' · ')}</div>` : ''}
-    ${comparison}${view.context ? `<div class="ui-item-comparison">${escapeUI(view.context)}</div>` : ''}`;
+    ${uniqueDefinition(item)?uniquePowerMarkup(uniqueDefinition(item)!):''}
+    ${itemModifiers(item).spellweavePercent ? `<p class="ui-item-description">Enables ${effectTerm('spellweave', 'Spellweave')} · melee ↔ magic · ${AFFIX_COMBAT_RULES.weaveDuration}s.</p>` : ''}${item.affixes.length ? `<div class="ui-item-affixes">${item.affixes.map(a => escapeUI(a.name)).join(' · ')}</div>` : ''}
+    ${comparison}<div class="ui-item-comparison"><span>Sell value · ${number(itemPrice(item, 'sell'), 0)} gold</span></div>
+    ${view.context ? `<div class="ui-item-comparison">${escapeUI(view.context)}</div>` : ''}`;
 }
 
 const EQUIPPED_LABELS: Record<EquipmentSlot, string> = {
@@ -126,14 +164,39 @@ const EQUIPPED_LABELS: Record<EquipmentSlot, string> = {
   legs: 'Legs', boots: 'Boots', cloak: 'Cloak', amulet: 'Amulet', ring1: 'Ring 1', ring2: 'Ring 2',
 };
 
+
 /** Use the real equip transaction's displacement, including hand conflicts and ring targets. */
 export function itemHoverCards(item: Item, view: ItemPresentation): string[] {
   const preview = view.compare === false || view.equipped || item.kind === 'charm' && view.sourceIndex !== undefined ? null : previewEquipmentChange(view.sheet, item, view.level,
     { sourceIndex: view.sourceIndex, slot: view.targetSlot });
   const displaced = preview?.ok ? preview.displaced : [];
   const card = (gear: Item, content: string, label = '') =>
-    `<section class="ui-item-hover-card" data-tier="${gear.tier}" style="--item-color:${TIER_COLORS[gear.tier]}">${label ? `<div class="ui-item-section-label ui-item-comparison-label">Equipped · ${label}</div>` : ''}${content}</section>`;
+    `<section class="ui-item-hover-card" data-tier="${gear.tier}" style="--item-color:${TIER_COLORS[gear.tier]}">${label && !view.compactComparison ? `<div class="ui-item-section-label ui-item-comparison-label">Equipped · ${label}</div>` : ''}${content}</section>`;
+
+  if (displaced.length > 1) {
+    // D4-style binary toggle: always exactly 2 cards (candidate vs one equipped slot).
+    // focusIndex=0 → compare vs main hand (displaced[0]), Alt label says "Compare with Off hand"
+    // focusIndex=1 → compare vs off hand (displaced[1]), Alt label says "Compare with Main hand"
+    const focus = (view.focusIndex ?? 0) % 2;
+    const target = displaced[focus];
+    const other = displaced[1 - focus];
+    const altLabel = `Compare with ${EQUIPPED_LABELS[other.slot] ?? other.slot}`;
+    const slotLabel = EQUIPPED_LABELS[target.slot] ?? target.slot;
+
+    const candidateContent = itemTooltipMarkup(item, {
+      ...view,
+      adjacentComparison: true,
+      altToggle: { label: altLabel, focusIndex: focus },
+    });
+
+    return [
+      card(item, candidateContent),
+      `<section class="ui-item-hover-card" data-tier="${target.item.tier}" style="--item-color:${TIER_COLORS[target.item.tier]}"><div class="ui-item-section-label ui-item-comparison-label" style="display:flex;justify-content:space-between;align-items:center;"><span>Equipped · ${slotLabel}</span><span style="font-size:10px;color:#8faab5;font-weight:normal;text-transform:none;">Replaces Main &amp; Off hand</span></div>${itemTooltipMarkup(target.item, { sheet: view.sheet, level: view.level, equipped: true, compactComparison: view.compactComparison, equippedLabel: slotLabel })}</section>`,
+    ];
+  }
+
   return [card(item, itemTooltipMarkup(item, { ...view, adjacentComparison: displaced.length > 0 })),
     ...displaced.map(({ item: gear, slot }) => card(gear,
-      itemTooltipMarkup(gear, { sheet: view.sheet, level: view.level, equipped: true }), EQUIPPED_LABELS[slot]))];
+      itemTooltipMarkup(gear, { sheet: view.sheet, level: view.level, equipped: true,
+        compactComparison: view.compactComparison, equippedLabel: EQUIPPED_LABELS[slot] }), EQUIPPED_LABELS[slot]))];
 }

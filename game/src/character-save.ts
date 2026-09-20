@@ -1,5 +1,7 @@
+import { upgradeSkillTree } from './skill-tree-upgrade.ts';
+import { doctrineConflict, SKILL_TREE_VERSION } from './skill-tree.ts';
 import { STASH_CAPACITY, MAX_STORAGE_TABS } from './storage-content.ts';
-import { resolvePackLayout, validPackLayout } from './inventory-grid.ts';
+import { PACK_CELLS, repackLayout, validPackLayout, type PackLayout } from './inventory-grid.ts';
 import { validEncounterScales } from './encounter-scaling.ts';
 import { validChronicle, type ChronicleProgress } from './chronicle.ts';
 import { validTreasureFlight } from './treasure-flight.ts';
@@ -16,7 +18,7 @@ import { validTravel, type TravelState } from './travel.ts';
 import { GOLD_RULES, type GroundGold } from './gold.ts';
 import { validGold } from './wallet.ts';
 import type { CharacterSheet, GroundItem, Item, SkillId } from './character-types.ts';
-import { INVENTORY_CAPACITY, EQUIPMENT_SLOTS, roundItemStats, rebalanceCharm, rebalanceItemMana, rebalanceItemOffense, rebalanceItemRolls } from './items.ts';
+import { INVENTORY_CAPACITY, EQUIPMENT_SLOTS, roundItemStats, refreshEquipmentBudgets, rebalanceCharm, rebalanceItemMana, rebalanceItemOffense, rebalanceItemRolls } from './items.ts';
 import { object, number, integer, text, validItem, type ObjectValue } from './item-validation.ts';
 import { validCommerce } from './commerce-validation.ts';
 import { itemFitsSlot } from './inventory.ts';
@@ -66,7 +68,7 @@ function validSheet(v: unknown, level: number): v is CharacterSheet {
     || !Array.isArray(v.allocatedNodes) || v.allocatedNodes.length > SKILL_NODES.size || !v.allocatedNodes.includes('origin')
     || !v.allocatedNodes.every(id => typeof id === 'string' && SKILL_NODES.has(id)) || new Set(v.allocatedNodes).size !== v.allocatedNodes.length) return false;
   const sheet = v as unknown as CharacterSheet;
-  if (!validSkillProgression(sheet) || !validPackLayout(sheet.inventory, sheet.inventoryLayout)) return false;
+  if (sheet.treeVersion!==SKILL_TREE_VERSION || sheet.treeRefunded!==undefined&&sheet.treeRefunded!==true || sheet.allocatedNodes.some(id=>doctrineConflict(sheet.allocatedNodes,SKILL_NODES.get(id)!)) || !validSkillProgression(sheet) || !validPackLayout(sheet.inventory, sheet.inventoryLayout)) return false;
   const ids = [...(sheet.stash??[]), ...sheet.inventory, ...Object.values(sheet.equipped)].filter((i): i is Item => i !== null).map(i => i.id);
   if (new Set(ids).size !== ids.length || sheet.equipped.weapon?.weapon?.hands === 2 && sheet.equipped.offhand !== null) return false;
   const allocated = new Set(sheet.allocatedNodes), connected = new Set(['origin']), queue = ['origin'];
@@ -93,16 +95,19 @@ export function decodeCharacterSave(raw: string): CharacterSave | null {
     }
     // v4 anchors were spread across multi-cell footprints, so they fall outside the uniform
     // grid. Drop the layout before validation reads it and repack it densely once, afterwards.
-    let compact = false;
+    // v4 charm rows began at cell 72; stones anchored there were active and stay in the charm grid.
+    let compact: PackLayout | null = null;
     if (object(v) && v.version === 4 && object(v.checkpoint) && object(v.checkpoint.character)) {
+      const legacy = v.checkpoint.character.inventoryLayout;
+      compact = object(legacy) ? Object.fromEntries(Object.entries(legacy).filter(([, cell]) => typeof cell === 'number' && cell >= 72).map(([id]) => [id, PACK_CELLS])) : {};
       delete v.checkpoint.character.inventoryLayout;
       v.version = CHARACTER_SAVE_VERSION;
-      compact = true;
     }
     if (!object(v) || v.version !== CHARACTER_SAVE_VERSION || !text(v.id, 64) || !/^[a-zA-Z0-9-]+$/.test(v.id)
       || !text(v.name, 24) || !integer(v.createdAt) || !integer(v.updatedAt) || v.updatedAt < v.createdAt
       || !integer(v.worldSeed, 0, 4294967295) || !integer(v.worldVersion, 1)) return null;
     const p = v.checkpoint;
+    if(!object(p)||!upgradeSkillTree(p))return null;
     if (!object(p) || (p.encounterScales !== undefined && !validEncounterScales(p.encounterScales)) || (p.chronicle !== undefined && !validChronicle(p.chronicle)) || (p.journeys !== undefined && !validJourneys(p.journeys)) || (p.campWounds!==undefined&&!validCampWounds(p.campWounds)) || (p.roaming !== undefined && (!object(p.roaming) || !integer(p.roaming.warmup,0,ROAMING_RULES.warmupPopulation) || !number(p.roaming.cooldown,-1,10) || !number(p.roaming.requiredDistance,0,300))) || (p.expeditions !== undefined && !validExpeditions(p.expeditions)) || (p.actors !== undefined && !validActors(p.actors)) || (p.pickups !== undefined && !validPickups(p.pickups)) || (p.events !== undefined && !validEvents(p.events)) || (p.travel !== undefined && !validTravel(p.travel)) || !integer(p.level, 1, MAX_CONTENT_LEVEL) || !integer(p.xp, 0) || (p.level < MAX_CONTENT_LEVEL && p.xp >= xpForNextLevel(p.level))
       || !validSheet(p.character, p.level) || !number(p.x, -4e7, 4e7) || !number(p.y, -4e7, 4e7) || !number(p.angle, -1000, 1000)
       || !number(p.hp, 0, 1e9) || !number(p.mana, 0, 1e9) || typeof p.dead !== 'boolean' || (!p.dead && p.hp <= 0)
@@ -140,8 +145,8 @@ export function decodeCharacterSave(raw: string): CharacterSave | null {
       if (epoch >= state.epoch && !(state.sold[source[1]] & 1 << slot)) return null;
     }
     // Normalize the validated parsed copy, including stored dungeon loot and buyback.
-    for (const item of items) Object.assign(item, roundItemStats(rebalanceItemRolls(rebalanceItemOffense(rebalanceItemMana(rebalanceCharm(item))))));
-    if (compact) p.character.inventoryLayout = resolvePackLayout({ inventory: p.character.inventory });
+    for (const item of items) Object.assign(item, roundItemStats(refreshEquipmentBudgets(rebalanceItemRolls(rebalanceItemOffense(rebalanceItemMana(rebalanceCharm(item)))))));
+    if (compact) p.character.inventoryLayout = repackLayout(p.character.inventory, compact);
     return v as unknown as CharacterSave;
   } catch { return null; }
 }

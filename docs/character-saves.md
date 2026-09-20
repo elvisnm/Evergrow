@@ -7,7 +7,7 @@ Every character starts at level 1 with the same attributes, worn leather outfit,
 
 ## Local spatial pack
 
-The local inventory prototype preserves older 64-entry bags and stores optional item-ID-to-cell positions in `inventoryLayout`. New bags allow 72 item records for a 12×6 physical grid; larger items consume multiple cells. Unfitted old items remain accessible as overflow, and the four charm rows are reserved. Geometry is validated with the save, including ownership, bounds and overlaps. See the local spatial inventory section in `character-systems.md`. This prototype has not been published.
+The local inventory prototype preserves older 64-entry bags and stores optional item-ID-to-cell positions in `inventoryLayout`. Version 5 uses an 8×3 bag of uniform one-cell slots plus a separate 8×3 charm grid. Loading a version 4 save discards its old positions and repacks once, keeping stones that sat in the old charm rows active. Unfitted old items remain accessible as overflow. Geometry is validated with the save, including ownership, bounds and overlaps. See the local spatial inventory section in `character-systems.md`. This prototype has not been published.
 
 ## Checkpoint contents
 
@@ -24,6 +24,8 @@ The local inventory prototype preserves older 64-entry bags and stores optional 
 Derived stats and held equipment are rebuilt from the character sheet on load. In-flight attacks and projectiles are not serialized. Living actor recipes/health and wounded sleeping camp members are retained; restored actions restart safely. Timed POI blessings retain their remaining duration. New room/camp admission still follows offscreen rules; killed camp members stay dead, preventing duplicate deterministic camp loot. Loading a blocked position searches nearby clear ground and falls back to the starting refuge. Defeat preserves progression; returning to the refuge restores resources and clears combat transients.
 
 ## When saving happens
+
+The Esc footer shows the active character’s last successful checkpoint time from `updatedAt`, in the device’s local time, followed by `(Local)` or `(Online)` for its save mode. Older saves include the date; hovering shows the full date and time. Failed writes do not advance this timestamp. Save errors and cloud-sync messages appear alongside the clock; the timestamp describes the stored character checkpoint, not a cloud upload acknowledgement.
 
 The optional `recentItems` character field records newest-first acquired item IDs, bounded to 75 unique entries (bag plus equipment capacity). Pickups, purchases and buyback record acquisitions; sorting and equipment swaps preserve the history. That historical sorting checkpoint did not require a progress reset; earlier pickup chronology was unknown. The current appearance schema v4 migrates pre-editor v3 characters as described below. The separate asynchronous-storage checkpoint starts fresh slots as described above. Sort commands persist the resulting bag order through the ordinary character-command checkpoint.
 
@@ -98,3 +100,7 @@ Clear surface positions remain unchanged. Blocked character positions and surfac
 The local worker copies the generation-9 chart into generation 10 in the same IndexedDB transaction as the upgraded character and revision. Explored cells remain; known town/service markers refresh from current geometry. Original chart bytes remain under the old key and the prior character is the last-good backup. Invalid chart data, failed writes or stale tokens abort entry and preserve the prior save.
 
 The cloud worker similarly builds one upgraded character/chart bundle and commits it to the normal account-scoped recovery/outbox transaction. Pending immutable generation-9 uploads finish before the upgraded bundle is sent. The matching server accepts generation 9 and 10 payloads during this transition, retaining all normal ownership, revision and validation checks. Local imports may contain generation 9 and upgrade on Continue; Cloud import/export remains disabled. No D1 schema change is needed. Deploy the matching client and Worker together when publication is requested.
+
+## Local skill-tree refund · 2026-09-12
+
+Version-4 payloads now carry `character.treeVersion: 2`. Saves without it pass the finite pre-redesign graph/rank/variant/point-ledger validator before receiving all node/rank points back. Assignments and skill cooldowns clear. Continue opens the tree at its root with the refund explanation visible and gameplay paused. Level, XP, attributes, gear, world state and exploration remain. Invalid or unsupported trees remain stored and are not silently repaired. Conversion modifies only a parsed copy. See [the exact refund rules](skill-progression.md#existing-characters).
